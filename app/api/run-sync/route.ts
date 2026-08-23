@@ -7,5 +7,13 @@ export const maxDuration = 300;
 // middleware le exige el mismo Basic Auth que al dashboard: el browser reenvia
 // solo las credenciales y nunca hace falta exponer CRON_SECRET al cliente.
 export async function POST() {
-  return NextResponse.json(await runSync());
+  try {
+    return NextResponse.json(await runSync());
+  } catch (e) {
+    // Sin esto, un error de configuracion llega al boton como un 500 sin texto.
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 500 },
+    );
+  }
 }

@@ -15,10 +15,22 @@ export type SyncResult = {
 // dashboard (/api/run-sync, con el Basic Auth del middleware).
 export async function runSync(): Promise<SyncResult> {
   const result: SyncResult = { statements: 0, salaries: 0, skipped: 0, errors: [] };
+  const nombreTarjetas = process.env.DRIVE_FOLDER_TARJETAS!;
+  const nombreSalarios = process.env.DRIVE_FOLDER_SALARIOS!;
+
+  // Resolver las dos carpetas juntas: si fallan las credenciales o Drive no
+  // responde, el error es el mismo para ambas y conviene reportarlo una sola vez.
+  let tarjetasId: string | null;
+  let salariosId: string | null;
+  try {
+    tarjetasId = await findFolder(nombreTarjetas);
+    salariosId = await findFolder(nombreSalarios);
+  } catch (e) {
+    result.errors.push(e instanceof Error ? e.message : String(e));
+    return result;
+  }
 
   // Resumenes de tarjeta
-  const nombreTarjetas = process.env.DRIVE_FOLDER_TARJETAS!;
-  const tarjetasId = await findFolder(nombreTarjetas);
   if (!tarjetasId) {
     result.errors.push(`No se encontro la carpeta "${nombreTarjetas}": compartila con el client_email de la service account.`);
   } else {
@@ -46,8 +58,6 @@ export async function runSync(): Promise<SyncResult> {
   }
 
   // Recibos de sueldo
-  const nombreSalarios = process.env.DRIVE_FOLDER_SALARIOS!;
-  const salariosId = await findFolder(nombreSalarios);
   if (!salariosId) {
     result.errors.push(`No se encontro la carpeta "${nombreSalarios}": compartila con el client_email de la service account.`);
   } else {

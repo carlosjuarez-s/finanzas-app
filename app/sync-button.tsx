@@ -18,8 +18,9 @@ export default function SyncButton() {
     setEstado({ fase: 'corriendo' });
     try {
       const res = await fetch('/api/run-sync', { method: 'POST' });
-      if (!res.ok) throw new Error(`El servidor respondio ${res.status}`);
-      const resultado: SyncResult = await res.json();
+      const cuerpo = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(cuerpo?.error ?? `El servidor respondio ${res.status}`);
+      const resultado: SyncResult = cuerpo;
       setEstado({ fase: 'listo', resultado });
       router.refresh(); // el dashboard es un server component: recarga los datos
     } catch (e) {
