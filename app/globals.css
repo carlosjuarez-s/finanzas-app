@@ -1,0 +1,77 @@
+/* Tokens — estetica "resumen bancario en papel de caña de azucar":
+   papel calido tucumano, tinta de imprenta, celeste-peso y verde-dolar.
+   Los montos siempre en mono tabular, como un libro mayor. */
+:root {
+  --papel: #F5F2EA;
+  --tinta: #22262B;
+  --tinta-suave: #6B7076;
+  --linea: #D9D3C4;
+  --peso: #2D5FA8;   /* ARS */
+  --dolar: #1E7A4F;  /* USD */
+  --alerta: #B4690E;
+  --font-display: 'Archivo', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+
+h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 90%;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+.eyebrow {
+  font-family: var(--font-data);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--tinta-suave);
+}
+.monto { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.ars { color: var(--peso); }
+.usd { color: var(--dolar); }
+
+/* Firma visual: la ecuacion del cierre como tira de libro mayor */
+.ledger {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  border-top: 2px solid var(--tinta);
+  border-bottom: 2px solid var(--tinta);
+  padding: 16px 0;
+  margin: 20px 0 28px;
+}
+.ledger .op { font-family: var(--font-data); font-size: 20px; color: var(--tinta-suave); text-align: center; }
+.ledger .celda { text-align: center; }
+.ledger .valor { font-family: var(--font-data); font-size: clamp(16px, 4.5vw, 22px); font-weight: 600; }
+
+section { margin: 28px 0; }
+section > h2 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--linea);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+.fila { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dotted var(--linea); }
+.barra { height: 6px; background: var(--peso); border-radius: 0; margin-top: 4px; }
+.chip {
+  font-family: var(--font-data); font-size: 11px;
+  border: 1px solid currentColor; padding: 1px 6px; margin-left: 6px;
+}
+.alerta { color: var(--alerta); }
+@media (prefers-reduced-motion: no-preference) {
+  .barra { transition: width 0.5s ease; }
+}

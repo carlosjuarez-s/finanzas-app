@@ -1,0 +1,63 @@
+import { pgTable, text, timestamp, numeric, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+import { createId } from './id';
+
+export const statements = pgTable('statements', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  fileId: text('file_id').notNull().unique(), // id del PDF en Drive, evita reprocesar
+  card: text('card').notNull(),               // MASTER | VISA | otra
+  periodo: text('periodo').notNull(),         // YYYY-MM (mes de vencimiento)
+  vencimiento: timestamp('vencimiento'),
+  totalArs: numeric('total_ars', { precision: 14, scale: 2 }).notNull(),
+  totalUsd: numeric('total_usd', { precision: 10, scale: 2 }).notNull(),
+  percepArs: numeric('percep_ars', { precision: 14, scale: 2 }).notNull(), // RG 4815/5617
+  raw: jsonb('raw').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const consumos = pgTable('consumos', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  statementId: text('statement_id').notNull().references(() => statements.id, { onDelete: 'cascade' }),
+  fecha: text('fecha').notNull(),
+  comercio: text('comercio').notNull(),
+  categoria: text('categoria').notNull(),
+  cuota: text('cuota'),
+  montoArs: numeric('monto_ars', { precision: 14, scale: 2 }).notNull(),
+  montoUsd: numeric('monto_usd', { precision: 10, scale: 2 }).notNull(),
+});
+
+export const salaries = pgTable('salaries', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  fileId: text('file_id').notNull(),
+  periodo: text('periodo').notNull().unique(),
+  netoArs: numeric('neto_ars', { precision: 14, scale: 2 }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const portfolioSnapshots = pgTable('portfolio_snapshots', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  periodo: text('periodo').notNull(),
+  plataforma: text('plataforma').notNull(),
+  totalUsd: numeric('total_usd', { precision: 14, scale: 2 }),
+  totalArs: numeric('total_ars', { precision: 16, scale: 2 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, t => [uniqueIndex('snapshot_periodo_plataforma').on(t.periodo, t.plataforma)]);
+
+export const positions = pgTable('positions', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  snapshotId: text('snapshot_id').notNull().references(() => portfolioSnapshots.id, { onDelete: 'cascade' }),
+  activo: text('activo').notNull(),
+  clase: text('clase').notNull(), // CRIPTO | CEDEAR | RENTA_FIJA | FCI | DOLAR
+  cantidad: numeric('cantidad', { precision: 20, scale: 8 }).notNull(),
+  valorUsd: numeric('valor_usd', { precision: 14, scale: 2 }),
+  valorArs: numeric('valor_ars', { precision: 16, scale: 2 }),
+});
+
+export const statementsRelations = relations(statements, ({ many }) => ({ consumos: many(consumos) }));
+export const consumosRelations = relations(consumos, ({ one }) => ({
+  statement: one(statements, { fields: [consumos.statementId], references: [statements.id] }),
+}));
+export const snapshotsRelations = relations(portfolioSnapshots, ({ many }) => ({ positions: many(positions) }));
+export const positionsRelations = relations(positions, ({ one }) => ({
+  snapshot: one(portfolioSnapshots, { fields: [positions.snapshotId], references: [portfolioSnapshots.id] }),
+}));
