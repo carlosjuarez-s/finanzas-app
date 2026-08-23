@@ -72,6 +72,24 @@ section > h2 {
   border: 1px solid currentColor; padding: 1px 6px; margin-left: 6px;
 }
 .alerta { color: var(--alerta); }
+
+/* Sync manual desde el navegador: sello de goma sobre el papel */
+.acciones { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0 4px; }
+.boton {
+  font-family: var(--font-data);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--papel);
+  background: var(--tinta);
+  border: 1px solid var(--tinta);
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.boton:hover:not(:disabled) { background: var(--peso); border-color: var(--peso); }
+.boton:disabled { opacity: 0.5; cursor: progress; }
+.resultado { font-family: var(--font-data); font-size: 12px; color: var(--tinta-suave); }
+
 @media (prefers-reduced-motion: no-preference) {
   .barra { transition: width 0.5s ease; }
 }

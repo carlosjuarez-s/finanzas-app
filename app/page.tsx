@@ -1,6 +1,7 @@
 import { desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, salaries, portfolioSnapshots } from '@/db/schema';
+import SyncButton from './sync-button';
 
 const fmtArs = (n: number) => '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtUsd = (n: number) => 'U$S ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -12,7 +13,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const ultimo = await db.query.statements.findFirst({ orderBy: desc(statements.periodo), columns: { periodo: true } });
   const periodo = qp ?? ultimo?.periodo;
   if (!periodo) {
-    return <main><h1>Sin datos</h1><p>Corre una sincronizacion: <code className="monto">POST /api/sync</code></p></main>;
+    return (
+      <main>
+        <p className="eyebrow">Cierre financiero</p>
+        <h1>Sin datos</h1>
+        <p>Toca sincronizar para leer los PDFs de Drive y armar el primer cierre.</p>
+        <SyncButton />
+      </main>
+    );
   }
 
   const sts = await db.query.statements.findMany({ where: eq(statements.periodo, periodo), with: { consumos: true } });
@@ -55,6 +63,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <main>
       <p className="eyebrow">Cierre financiero</p>
       <h1>{periodo}</h1>
+      <SyncButton />
 
       <div className="ledger">
         <div className="celda"><p className="eyebrow">Ingreso neto</p><p className="valor ars">{fmtArs(neto)}</p></div>
