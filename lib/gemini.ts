@@ -2,8 +2,10 @@ import { GoogleGenAI } from '@google/genai';
 import type { Documento } from './tipos';
 
 let _client: GoogleGenAI | null = null;
-// Flash tiene el limite gratuito mas alto (1500 req/dia) y lee PDFs nativamente.
-const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+// Flash tiene el limite gratuito mas alto y lee PDFs nativamente. Google retira
+// las versiones viejas para cuentas nuevas (2.5-flash devuelve 404), asi que si
+// vuelve a pasar se cambia por GEMINI_MODEL sin tocar el codigo.
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
 
 export const geminiConfigurado = () => Boolean(process.env.GEMINI_API_KEY?.trim());
 
