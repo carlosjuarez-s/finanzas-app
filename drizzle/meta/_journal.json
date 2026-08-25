@@ -15,6 +15,13 @@
       "when": 1787683397023,
       "tag": "0001_monthly_closes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787684244750,
+      "tag": "0002_metas_y_supuestos",
+      "breakpoints": true
     }
   ]
 }

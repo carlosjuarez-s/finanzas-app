@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, numeric, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, numeric, jsonb, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createId } from './id';
 
@@ -69,6 +69,27 @@ export const monthlyCloses = pgTable('monthly_closes', {
   tasaAhorro: numeric('tasa_ahorro', { precision: 6, scale: 2 }),
   porCategoria: jsonb('por_categoria').notNull(),
   calculadoAt: timestamp('calculado_at').defaultNow().notNull(),
+});
+
+// Metas de ahorro. La moneda importa: una meta en pesos a dos años no dice nada
+// sin ajuste, asi que el default es USD y el progreso se mide en USD reales.
+export const goals = pgTable('goals', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  nombre: text('nombre').notNull(),
+  montoObjetivo: numeric('monto_objetivo', { precision: 14, scale: 2 }).notNull(),
+  moneda: text('moneda').notNull().default('USD'),  // ARS | USD
+  fechaObjetivo: text('fecha_objetivo'),            // YYYY-MM, opcional
+  notas: text('notas'),
+  archivada: boolean('archivada').notNull().default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Clave-valor para los supuestos de proyeccion (retornos, tipo de cambio) y lo
+// que se quiera hacer configurable despues, sin una migracion por cada opcion.
+export const settings = pgTable('settings', {
+  clave: text('clave').primaryKey(),
+  valor: jsonb('valor').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const statementsRelations = relations(statements, ({ many }) => ({ consumos: many(consumos) }));

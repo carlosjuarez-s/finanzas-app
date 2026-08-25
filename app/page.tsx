@@ -2,11 +2,10 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, portfolioSnapshots } from '@/db/schema';
 import { calcularCierre } from '@/lib/cierre';
+import { fmtArs, fmtUsd } from '@/lib/formato';
+import Nav from './nav';
 import SyncButton from './sync-button';
 import UploadPanel from './upload-panel';
-
-const fmtArs = (n: number) => '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtUsd = (n: number) => 'U$S ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +16,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   if (!periodo) {
     return (
       <main>
+        <Nav />
         <p className="eyebrow">Cierre financiero</p>
         <h1>Sin datos</h1>
         <p>Sincroniza Drive o subi los documentos a mano para armar el primer cierre.</p>
@@ -51,6 +51,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   return (
     <main>
+      <Nav />
       <p className="eyebrow">Cierre financiero</p>
       <h1>{periodo}</h1>
       <SyncButton />

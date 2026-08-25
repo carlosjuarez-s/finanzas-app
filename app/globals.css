@@ -90,6 +90,38 @@ section > h2 {
 .boton:disabled { opacity: 0.5; cursor: progress; }
 .resultado { font-family: var(--font-data); font-size: 12px; color: var(--tinta-suave); }
 
+/* Graficos: las marcas son lo unico que puede levantar la voz. */
+.grafico { margin: 12px 0; }
+.grafico svg { width: 100%; height: auto; display: block; }
+.grafico .eje {
+  font-family: var(--font-data); font-size: 10px;
+  font-variant-numeric: tabular-nums; fill: var(--tinta-suave);
+}
+.leyenda { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 6px; }
+.leyenda-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tinta-suave); }
+.leyenda-marca { width: 12px; height: 2px; display: inline-block; }
+.tabla-gemela { margin-top: 10px; font-size: 12px; }
+.tabla-gemela summary { cursor: pointer; color: var(--tinta-suave); font-family: var(--font-data); font-size: 11px; }
+.tabla-gemela table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.tabla-gemela th, .tabla-gemela td { text-align: right; padding: 4px 6px; border-bottom: 1px dotted var(--linea); }
+.tabla-gemela th:first-child, .tabla-gemela td:first-child { text-align: left; }
+.tabla-gemela th { font-family: var(--font-data); font-size: 11px; color: var(--tinta-suave); font-weight: 400; }
+
+/* Navegacion entre secciones */
+.nav { display: flex; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--linea); padding-bottom: 10px; margin-bottom: 18px; }
+.nav a {
+  font-family: var(--font-data); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--tinta-suave); text-decoration: none;
+}
+.nav a:hover { color: var(--tinta); }
+.nav a[aria-current='page'] { color: var(--tinta); border-bottom: 2px solid var(--tinta); }
+
+.supuesto { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 6px 0; }
+.nota {
+  font-size: 12px; color: var(--tinta-suave); border-left: 2px solid var(--linea);
+  padding-left: 10px; margin: 12px 0;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .barra { transition: width 0.5s ease; }
 }

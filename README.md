@@ -25,6 +25,44 @@ salaries: se recalcula tras cada sync o upload. `lib/cierre.ts` tiene el cálcul
 y lo usan tanto el dashboard (en vivo) como el histórico, para que no puedan
 mostrar números distintos del mismo mes.
 
+## Secciones
+
+| Ruta | Qué hace |
+|---|---|
+| `/` | Cierre del mes, sync de Drive y subida manual de documentos |
+| `/historico` | Evolución mes a mes y en qué se fue la plata acumulada |
+| `/metas` | Metas de ahorro y cuándo se alcanzan según tu ritmo real |
+| `/proyeccion` | Simulador "qué pasa si ahorro X%" y supuestos editables |
+
+## Proyecciones
+
+`lib/proyeccion.ts` es **matemática determinista, no un modelo de lenguaje**: un
+LLM puede devolver un número plausible y equivocado, y acá se toman decisiones de
+plata. Tiene tests (`npm test`) que lo contrastan contra la fórmula cerrada de
+anualidad vencida.
+
+**Todo se expresa en dólares reales de hoy.** Con inflación alta, un saldo nominal
+en pesos a tres años no dice nada: "vas a tener 40 millones" no aclara si alcanza
+para un auto. Fijando la unidad en poder de compra actual, los números se comparan
+entre sí y contra una meta.
+
+Los retornos de `SUPUESTOS_DEFAULT` son **supuestos editables, no predicciones**, y
+se guardan en la tabla `settings`. El ~7% real del S&P 500 es un promedio histórico
+de décadas que incluye caídas de más del 30%: ningún año concreto se parece al
+promedio.
+
+## Gráficos
+
+La paleta de series (`SERIE_COLORES` en `app/line-chart.tsx`) está **validada con
+el script de la skill de dataviz** contra el fondo papel. El orden ámbar → azul →
+verde no es estético: con ámbar y verde adyacentes, el par cae a ΔE 6.1 bajo
+daltonismo protán y deja de distinguirse; separados da 17.3. **No reordenar sin
+volver a validar.**
+
+> **Ojo:** `LineChart` recibe el formato **por nombre** (`formato="corto"`), no una
+> función. React no puede serializar funciones de un server component a uno de
+> cliente, y el error aparece recién al renderizar la página, no al compilar.
+
 Los prompts de `lib/prompts.ts` son la spec validada del skill
 "cierre-financiero" — misma lógica de categorización y reglas argentinas
 (RG 4815/5617, cuotas NN/MM, MERPAGO*, formato de montos).
