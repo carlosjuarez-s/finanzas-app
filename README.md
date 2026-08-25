@@ -19,6 +19,26 @@ Los prompts de `lib/prompts.ts` son la spec validada del skill
 "cierre-financiero" — misma lógica de categorización y reglas argentinas
 (RG 4815/5617, cuotas NN/MM, MERPAGO*, formato de montos).
 
+La extracción pasa por `lib/extract.ts`, que usa Anthropic y cae a Gemini sólo
+si la cuenta no puede responder (sin crédito, key inválida, cuota agotada). Un
+error de extracción real se propaga en vez de reintentarse en el otro proveedor.
+
+## UI (Ant Design)
+
+La UI usa **antd v6**, que soporta React 19 sin el parche de compatibilidad que
+necesitaba v5. El montaje está en `app/layout.tsx`:
+
+- `AntdRegistry` extrae los estilos en el server. Sin él, antd los inyecta recién
+  en el cliente y la página parpadea sin estilos al cargar.
+- `app/theme.tsx` mapea la paleta de `globals.css` a los tokens de antd (azul
+  peso como `colorPrimary`, verde dólar como `colorSuccess`, `borderRadius: 0`).
+  Para cambiar el look, ese es el único archivo a tocar.
+
+> **Ojo al maquetar:** el App Router no soporta subcomponentes por dot notation
+> (`<Typography.Title>`, `<Select.Option>`) dentro de un **server component** —
+> falla con "Element type is invalid … got: undefined". En componentes
+> `'use client'` funciona normalmente.
+
 ## Setup
 
 ### 1. Service account de Google (sin OAuth)

@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button, Space, Typography } from 'antd';
 import type { SyncResult } from '@/lib/sync';
+
+const { Text } = Typography;
 
 type Estado =
   | { fase: 'idle' }
@@ -40,24 +43,33 @@ export default function SyncButton() {
     }
   }
 
-  return (
-    <div className="acciones">
-      <button className="boton" onClick={sincronizar} disabled={estado.fase === 'corriendo'}>
-        {estado.fase === 'corriendo' ? 'Sincronizando…' : 'Sincronizar ahora'}
-      </button>
+  const corriendo = estado.fase === 'corriendo';
 
-      {estado.fase === 'corriendo' && (
-        <span className="resultado">Leyendo Drive y extrayendo PDFs, puede tardar un minuto.</span>
+  return (
+    <Space className="acciones" wrap align="center">
+      {/* loading ya muestra el spinner y bloquea el boton: no hace falta
+          alternar el texto ni manejar disabled a mano. */}
+      <Button type="primary" onClick={sincronizar} loading={corriendo}>
+        Sincronizar ahora
+      </Button>
+
+      {corriendo && (
+        <Text type="secondary" className="resultado">
+          Leyendo Drive y extrayendo PDFs, puede tardar un minuto.
+        </Text>
       )}
 
-      {estado.fase === 'error' && <span className="resultado alerta">{estado.msg}</span>}
+      {estado.fase === 'error' && <Text type="danger" className="resultado">{estado.msg}</Text>}
 
       {estado.fase === 'listo' && (
-        <span className={`resultado ${estado.resultado.errors.length ? 'alerta' : 'usd'}`}>
+        <Text
+          type={estado.resultado.errors.length ? 'warning' : 'success'}
+          className="resultado"
+        >
           {resumen(estado.resultado)}
           {estado.resultado.errors.map((err, i) => <span key={i} style={{ display: 'block' }}>{err}</span>)}
-        </span>
+        </Text>
       )}
-    </div>
+    </Space>
   );
 }
