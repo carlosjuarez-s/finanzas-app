@@ -4,17 +4,26 @@ import { monthlyCloses } from '@/db/schema';
 import { leerSupuestos, ahorroAcumuladoUsd } from '@/lib/supuestos';
 import { promedioMensual } from '@/lib/proyeccion';
 import { fmtArs } from '@/lib/formato';
+import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
+import FaltaMigracion from '../falta-migracion';
 import Simulador from './simulador';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Proyeccion() {
-  const [supuestos, cierres] = await Promise.all([
-    leerSupuestos(),
-    db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
-  ]);
-  const acumuladoUsd = await ahorroAcumuladoUsd(supuestos.tipoCambioArs);
+  let supuestos, cierres, acumuladoUsd;
+  try {
+    [supuestos, cierres] = await Promise.all([
+      leerSupuestos(),
+      db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
+    ]);
+    acumuladoUsd = await ahorroAcumuladoUsd(supuestos.tipoCambioArs);
+  } catch (e) {
+    const tabla = tablaFaltante(e);
+    if (!tabla) throw e;
+    return <FaltaMigracion tabla={tabla} seccion="Proyeccion" />;
+  }
 
   // Ultimos 6 meses: suficiente para suavizar un mes raro sin arrastrar un
   // sueldo de hace dos años.

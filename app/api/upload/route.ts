@@ -6,6 +6,7 @@ import { statements, salaries } from '@/db/schema';
 import { clasificarDocumento, faltaProveedor } from '@/lib/extract';
 import { guardarStatement, guardarSalary, guardarPortfolio } from '@/lib/guardar';
 import { guardarCierres, periodoSiguiente } from '@/lib/cierre';
+import { mensajeDeError } from '@/lib/errores';
 
 import type { ResultadoArchivo } from '@/lib/tipos';
 
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
           resultados.push({ nombre, estado: 'desconocido', detalle: doc.datos?.motivo ?? 'No se reconocio el tipo de documento.' });
       }
     } catch (e) {
-      resultados.push({ nombre, estado: 'error', detalle: e instanceof Error ? e.message : String(e) });
+      resultados.push({ nombre, estado: 'error', detalle: mensajeDeError(e) });
     }
   }
 
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
     try {
       await guardarCierres([...periodosTocados]);
     } catch (e) {
-      historico = `Los datos se guardaron, pero fallo el recalculo del historico: ${e instanceof Error ? e.message : e}`;
+      historico = `Los datos se guardaron, pero fallo el recalculo del historico. ${mensajeDeError(e)}`;
     }
   }
 

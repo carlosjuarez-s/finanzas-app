@@ -2,13 +2,22 @@ import { asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { monthlyCloses } from '@/db/schema';
 import { fmtArs, fmtPct, fmtPeriodo } from '@/lib/formato';
+import { tablaFaltante } from '@/lib/errores';
 import LineChart from '../line-chart';
 import Nav from '../nav';
+import FaltaMigracion from '../falta-migracion';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Historico() {
-  const cierres = await db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo));
+  let cierres;
+  try {
+    cierres = await db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo));
+  } catch (e) {
+    const tabla = tablaFaltante(e);
+    if (!tabla) throw e;   // otro error de base: que se vea, no que se disfrace
+    return <FaltaMigracion tabla={tabla} seccion="Historico" />;
+  }
 
   if (!cierres.length) {
     return (

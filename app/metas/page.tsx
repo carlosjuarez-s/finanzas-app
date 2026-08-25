@@ -4,7 +4,9 @@ import { goals, monthlyCloses } from '@/db/schema';
 import { leerSupuestos, ahorroAcumuladoUsd } from '@/lib/supuestos';
 import { proyectar, promedioMensual, mesQueAlcanza } from '@/lib/proyeccion';
 import { fmtUsd, fmtPct, fmtPeriodo } from '@/lib/formato';
+import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
+import FaltaMigracion from '../falta-migracion';
 import MetaForm from './meta-form';
 import BorrarMeta from './borrar-meta';
 
@@ -13,13 +15,19 @@ export const dynamic = 'force-dynamic';
 const HORIZONTE_MESES = 360; // 30 años: mas alla, la estimacion no dice nada
 
 export default async function Metas() {
-  const [metas, supuestos, cierres] = await Promise.all([
-    db.select().from(goals).orderBy(asc(goals.createdAt)),
-    leerSupuestos(),
-    db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
-  ]);
-
-  const acumuladoUsd = await ahorroAcumuladoUsd(supuestos.tipoCambioArs);
+  let metas, supuestos, cierres, acumuladoUsd;
+  try {
+    [metas, supuestos, cierres] = await Promise.all([
+      db.select().from(goals).orderBy(asc(goals.createdAt)),
+      leerSupuestos(),
+      db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
+    ]);
+    acumuladoUsd = await ahorroAcumuladoUsd(supuestos.tipoCambioArs);
+  } catch (e) {
+    const tabla = tablaFaltante(e);
+    if (!tabla) throw e;
+    return <FaltaMigracion tabla={tabla} seccion="Metas" />;
+  }
   const prom = promedioMensual(cierres.map(c => ({
     ingresoArs: Number(c.ingresoArs), gastoArs: Number(c.gastoArs),
   })));

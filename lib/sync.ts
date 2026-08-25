@@ -4,6 +4,7 @@ import { findFolder, listPdfs, downloadBase64 } from '@/lib/drive';
 import { extractStatement, extractSalary, faltaProveedor } from '@/lib/extract';
 import { guardarStatement, guardarSalary } from '@/lib/guardar';
 import { guardarCierres } from '@/lib/cierre';
+import { mensajeDeError } from '@/lib/errores';
 
 export type SyncResult = {
   statements: number;
@@ -91,7 +92,7 @@ export async function runSync(): Promise<SyncResult> {
     try {
       await guardarCierres();
     } catch (e) {
-      result.errors.push(`Los datos se guardaron, pero fallo el recalculo del historico: ${e instanceof Error ? e.message : e}`);
+      result.errors.push(`Los datos se guardaron, pero fallo el recalculo del historico. ${mensajeDeError(e)}`);
     }
   }
 
