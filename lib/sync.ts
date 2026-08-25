@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, consumos, salaries } from '@/db/schema';
 import { findFolder, listPdfs, downloadBase64 } from '@/lib/drive';
@@ -39,13 +38,24 @@ export async function runSync(): Promise<SyncResult> {
     return result;
   }
 
+  // Que archivos ya estan cargados, en dos consultas y no una por PDF: el caso
+  // normal es que no haya nada nuevo, y preguntar de a uno son N round-trips a
+  // Neon para descubrirlo. El fileId de Drive es la identidad del documento.
+  const [cargadosTarjetas, cargadosSalarios] = await Promise.all([
+    db.select({ fileId: statements.fileId }).from(statements),
+    db.select({ fileId: salaries.fileId }).from(salaries),
+  ]);
+  const procesados = {
+    tarjetas: new Set(cargadosTarjetas.map(r => r.fileId)),
+    salarios: new Set(cargadosSalarios.map(r => r.fileId)),
+  };
+
   // Resumenes de tarjeta
   if (!tarjetasId) {
     result.errors.push(`No se encontro la carpeta "${nombreTarjetas}": compartila con el client_email de la service account.`);
   } else {
     for (const f of await listPdfs(tarjetasId)) {
-      const existing = await db.query.statements.findFirst({ where: eq(statements.fileId, f.id!) });
-      if (existing) { result.skipped++; continue; }
+      if (procesados.tarjetas.has(f.id!)) { result.skipped++; continue; }
       try {
         const data = await extractStatement(await downloadBase64(f.id!));
         const [st] = await db.insert(statements).values({
@@ -71,8 +81,15 @@ export async function runSync(): Promise<SyncResult> {
     result.errors.push(`No se encontro la carpeta "${nombreSalarios}": compartila con el client_email de la service account.`);
   } else {
     for (const f of await listPdfs(salariosId)) {
+      if (procesados.salarios.has(f.id!)) { result.skipped++; continue; }
       try {
         const data = await extractSalary(await downloadBase64(f.id!));
+        // Sin recibos no se guarda nada, asi que el archivo volveria a
+        // procesarse (y a cobrarse) en cada sync: conviene avisar.
+        if (!data.recibos.length) {
+          result.errors.push(`${f.name}: no se reconocio ningun recibo en el PDF.`);
+          continue;
+        }
         for (const r of data.recibos) {
           await db.insert(salaries)
             .values({ periodo: r.periodo, netoArs: String(r.netoArs), fileId: f.id! })
