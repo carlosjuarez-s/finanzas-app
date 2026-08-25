@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, consumos, salaries } from '@/db/schema';
 import { findFolder, listPdfs, downloadBase64 } from '@/lib/drive';
-import { extractStatement, extractSalary } from '@/lib/anthropic';
+import { extractStatement, extractSalary, faltaApiKey } from '@/lib/anthropic';
 
 export type SyncResult = {
   statements: number;
@@ -15,6 +15,15 @@ export type SyncResult = {
 // dashboard (/api/run-sync, con el Basic Auth del middleware).
 export async function runSync(): Promise<SyncResult> {
   const result: SyncResult = { statements: 0, salaries: 0, skipped: 0, errors: [] };
+
+  // Chequeo instantaneo: sin la key todos los PDFs fallan igual, y bajarlos de
+  // Drive para descubrirlo uno por uno solo repite el mismo error N veces.
+  const sinKey = faltaApiKey();
+  if (sinKey) {
+    result.errors.push(sinKey);
+    return result;
+  }
+
   const nombreTarjetas = process.env.DRIVE_FOLDER_TARJETAS!;
   const nombreSalarios = process.env.DRIVE_FOLDER_SALARIOS!;
 
