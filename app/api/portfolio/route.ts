@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { portfolioSnapshots, positions } from '@/db/schema';
-import { extractPortfolio } from '@/lib/anthropic';
+import { extractPortfolio } from '@/lib/extract';
 
 export const maxDuration = 120;
 

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, consumos, salaries } from '@/db/schema';
 import { findFolder, listPdfs, downloadBase64 } from '@/lib/drive';
-import { extractStatement, extractSalary, faltaApiKey } from '@/lib/anthropic';
+import { extractStatement, extractSalary, faltaProveedor } from '@/lib/extract';
 
 export type SyncResult = {
   statements: number;
@@ -16,11 +16,11 @@ export type SyncResult = {
 export async function runSync(): Promise<SyncResult> {
   const result: SyncResult = { statements: 0, salaries: 0, skipped: 0, errors: [] };
 
-  // Chequeo instantaneo: sin la key todos los PDFs fallan igual, y bajarlos de
-  // Drive para descubrirlo uno por uno solo repite el mismo error N veces.
-  const sinKey = faltaApiKey();
-  if (sinKey) {
-    result.errors.push(sinKey);
+  // Chequeo instantaneo: sin proveedor todos los PDFs fallan igual, y bajarlos
+  // de Drive para descubrirlo uno por uno solo repite el mismo error N veces.
+  const sinProveedor = faltaProveedor();
+  if (sinProveedor) {
+    result.errors.push(sinProveedor);
     return result;
   }
 
