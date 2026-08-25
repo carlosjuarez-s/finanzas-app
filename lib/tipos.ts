@@ -14,6 +14,23 @@ export type StatementData = {
 
 export type SalaryData = { recibos: { periodo: string; netoArs: number }[] };
 
+// Lo que el upload reporta por archivo. Vive aca y no en la ruta para que el
+// componente de cliente lo importe sin arrastrar el modulo del servidor.
+export type ResultadoArchivo = {
+  nombre: string;
+  estado: 'cargado' | 'duplicado' | 'desconocido' | 'error';
+  tipo?: string;
+  detalle?: string;
+};
+
+// Resultado del upload manual: el tipo lo decide el modelo, asi que la union
+// obliga a chequearlo antes de tocar los datos.
+export type DocumentoClasificado =
+  | { tipo: 'STATEMENT'; datos: StatementData }
+  | { tipo: 'SALARY'; datos: SalaryData }
+  | { tipo: 'PORTFOLIO'; datos: PortfolioData }
+  | { tipo: 'DESCONOCIDO'; datos: { motivo?: string } };
+
 export type PortfolioData = {
   plataforma: string; totalUsd: number | null; totalArs: number | null;
   positions: { activo: string; clase: string; cantidad: number; valorUsd: number | null; valorArs: number | null }[];

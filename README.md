@@ -8,12 +8,22 @@ categorías, suscripciones, cuotas, percepciones recuperables e inversiones.
 ## Arquitectura
 
 ```
-Cron Vercel (día 22) ──▶ /api/sync ──▶ Drive (service account, readonly)
-                                  └──▶ Claude API (PDF → JSON estructurado)
-                                  └──▶ Postgres (Drizzle)
-Capturas Binance/IOL ──▶ /api/portfolio ──▶ Claude API (visión) ──▶ Postgres
-Dashboard (/) ◀── Postgres (server component, sin client JS)
+Cron Vercel (día 22) ──▶ /api/sync ────┐
+Subida manual ───────▶ /api/upload ────┤   (clasifica solo el tipo)
+                                       ├──▶ lib/extract  (Anthropic → Gemini)
+                                       ├──▶ lib/guardar  (statements/salaries/portfolio)
+                                       └──▶ lib/cierre   (recalcula monthly_closes)
+Dashboard (/) ◀── Postgres (server component)
 ```
+
+**Identidad de un documento.** La columna `fileId` es el origen: el id del archivo
+en Drive, o `upload:<sha256>` para los subidos a mano. El `unique` de esa columna
+es lo que evita procesar (y pagar) dos veces el mismo PDF, venga de donde venga.
+
+**`monthly_closes` es una vista materializada** de statements + consumos +
+salaries: se recalcula tras cada sync o upload. `lib/cierre.ts` tiene el cálculo,
+y lo usan tanto el dashboard (en vivo) como el histórico, para que no puedan
+mostrar números distintos del mismo mes.
 
 Los prompts de `lib/prompts.ts` son la spec validada del skill
 "cierre-financiero" — misma lógica de categorización y reglas argentinas

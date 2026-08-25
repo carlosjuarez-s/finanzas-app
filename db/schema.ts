@@ -53,6 +53,24 @@ export const positions = pgTable('positions', {
   valorArs: numeric('valor_ars', { precision: 16, scale: 2 }),
 });
 
+// Cierre ya calculado de cada mes. Es una vista materializada de statements +
+// consumos + salaries: se recalcula despues de cada sync o upload. Existe para
+// que el historico (graficos, proyecciones, metas) no tenga que recorrer todos
+// los consumos de todos los meses cada vez que se lo consulta.
+export const monthlyCloses = pgTable('monthly_closes', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  periodo: text('periodo').notNull().unique(),
+  ingresoArs: numeric('ingreso_ars', { precision: 14, scale: 2 }).notNull(),
+  gastoArs: numeric('gasto_ars', { precision: 14, scale: 2 }).notNull(),
+  gastoUsd: numeric('gasto_usd', { precision: 10, scale: 2 }).notNull(),
+  percepArs: numeric('percep_ars', { precision: 14, scale: 2 }).notNull(),
+  ahorroArs: numeric('ahorro_ars', { precision: 14, scale: 2 }).notNull(),
+  // null cuando no hay recibo cargado: 0% y "no se sabe" no son lo mismo.
+  tasaAhorro: numeric('tasa_ahorro', { precision: 6, scale: 2 }),
+  porCategoria: jsonb('por_categoria').notNull(),
+  calculadoAt: timestamp('calculado_at').defaultNow().notNull(),
+});
+
 export const statementsRelations = relations(statements, ({ many }) => ({ consumos: many(consumos) }));
 export const consumosRelations = relations(consumos, ({ one }) => ({
   statement: one(statements, { fields: [consumos.statementId], references: [statements.id] }),

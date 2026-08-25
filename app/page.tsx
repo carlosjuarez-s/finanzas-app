@@ -1,7 +1,9 @@
-import { desc, eq, inArray } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, salaries, portfolioSnapshots } from '@/db/schema';
+import { statements, portfolioSnapshots } from '@/db/schema';
+import { calcularCierre } from '@/lib/cierre';
 import SyncButton from './sync-button';
+import UploadPanel from './upload-panel';
 
 const fmtArs = (n: number) => '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtUsd = (n: number) => 'U$S ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -17,37 +19,25 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <main>
         <p className="eyebrow">Cierre financiero</p>
         <h1>Sin datos</h1>
-        <p>Toca sincronizar para leer los PDFs de Drive y armar el primer cierre.</p>
+        <p>Sincroniza Drive o subi los documentos a mano para armar el primer cierre.</p>
         <SyncButton />
+        <UploadPanel />
       </main>
     );
   }
 
   const sts = await db.query.statements.findMany({ where: eq(statements.periodo, periodo), with: { consumos: true } });
-  // El recibo del mes anterior paga los consumos de este cierre
-  const [y, m] = periodo.split('-').map(Number);
-  const prev = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
-  const salary = await db.query.salaries.findFirst({
-    where: inArray(salaries.periodo, [prev, periodo]),
-    orderBy: desc(salaries.periodo),
-  });
   const snapshots = await db.query.portfolioSnapshots.findMany({
     where: eq(portfolioSnapshots.periodo, periodo),
     with: { positions: true },
   });
 
-  const gastoArs = sts.reduce((s, st) => s + Number(st.totalArs), 0);
-  const gastoUsd = sts.reduce((s, st) => s + Number(st.totalUsd), 0);
-  const percep = sts.reduce((s, st) => s + Number(st.percepArs), 0);
-  const neto = Number(salary?.netoArs ?? 0);
-  const ahorro = neto - gastoArs;
-  const tasa = neto ? (ahorro / neto) * 100 : null;
+  // Mismo calculo que persiste el historico: si divergieran, el dashboard y los
+  // graficos mostrarian numeros distintos para el mismo mes.
+  const { ingresoArs: neto, gastoArs, gastoUsd, percepArs: percep, ahorroArs: ahorro, tasaAhorro: tasa, porCategoria } =
+    await calcularCierre(periodo);
 
-  const porCategoria = new Map<string, number>();
-  for (const st of sts) for (const c of st.consumos) {
-    porCategoria.set(c.categoria, (porCategoria.get(c.categoria) ?? 0) + Number(c.montoArs));
-  }
-  const cats = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]);
+  const cats = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
   const maxCat = cats[0]?.[1] ?? 1;
 
   const subs = sts.flatMap(st => st.consumos).filter(c => c.categoria === 'Suscripciones');
@@ -106,6 +96,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           ))}
         </section>
       )}
+
+      <UploadPanel />
 
       <section>
         <h2>Percepciones recuperables</h2>

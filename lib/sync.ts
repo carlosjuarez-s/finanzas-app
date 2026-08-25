@@ -1,7 +1,9 @@
 import { db } from '@/lib/db';
-import { statements, consumos, salaries } from '@/db/schema';
+import { statements, salaries } from '@/db/schema';
 import { findFolder, listPdfs, downloadBase64 } from '@/lib/drive';
 import { extractStatement, extractSalary, faltaProveedor } from '@/lib/extract';
+import { guardarStatement, guardarSalary } from '@/lib/guardar';
+import { guardarCierres } from '@/lib/cierre';
 
 export type SyncResult = {
   statements: number;
@@ -57,20 +59,7 @@ export async function runSync(): Promise<SyncResult> {
     for (const f of await listPdfs(tarjetasId)) {
       if (procesados.tarjetas.has(f.id!)) { result.skipped++; continue; }
       try {
-        const data = await extractStatement(await downloadBase64(f.id!));
-        const [st] = await db.insert(statements).values({
-          fileId: f.id!, card: data.card, periodo: data.periodo,
-          vencimiento: data.vencimiento ? new Date(data.vencimiento) : null,
-          totalArs: String(data.totalArs), totalUsd: String(data.totalUsd),
-          percepArs: String(data.percepArs), raw: data,
-        }).returning({ id: statements.id });
-        if (data.consumos.length) {
-          await db.insert(consumos).values(data.consumos.map(c => ({
-            statementId: st.id, fecha: c.fecha, comercio: c.comercio,
-            categoria: c.categoria, cuota: c.cuota,
-            montoArs: String(c.montoArs), montoUsd: String(c.montoUsd),
-          })));
-        }
+        await guardarStatement(f.id!, await extractStatement(await downloadBase64(f.id!)));
         result.statements++;
       } catch (e) { result.errors.push(`${f.name}: ${e}`); }
     }
@@ -90,16 +79,19 @@ export async function runSync(): Promise<SyncResult> {
           result.errors.push(`${f.name}: no se reconocio ningun recibo en el PDF.`);
           continue;
         }
-        for (const r of data.recibos) {
-          await db.insert(salaries)
-            .values({ periodo: r.periodo, netoArs: String(r.netoArs), fileId: f.id! })
-            .onConflictDoUpdate({
-              target: salaries.periodo,
-              set: { netoArs: String(r.netoArs), fileId: f.id! },
-            });
-          result.salaries++;
-        }
+        const { cantidad } = await guardarSalary(f.id!, data);
+        result.salaries += cantidad;
       } catch (e) { result.errors.push(`${f.name}: ${e}`); }
+    }
+  }
+
+  // Refrescar el historico solo si entro algo. Va aparte del try de cada
+  // archivo: si el recalculo falla, la extraccion ya hecha no se pierde.
+  if (result.statements || result.salaries) {
+    try {
+      await guardarCierres();
+    } catch (e) {
+      result.errors.push(`Los datos se guardaron, pero fallo el recalculo del historico: ${e instanceof Error ? e.message : e}`);
     }
   }
 

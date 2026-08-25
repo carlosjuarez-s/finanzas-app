@@ -1,9 +1,9 @@
-import { STATEMENT_SYSTEM, SALARY_SYSTEM, PORTFOLIO_SYSTEM } from './prompts';
+import { STATEMENT_SYSTEM, SALARY_SYSTEM, PORTFOLIO_SYSTEM, CLASSIFY_SYSTEM } from './prompts';
 import { anthropicConfigurado, anthropicGenerar, anthropicSinCredito } from './anthropic';
 import { geminiConfigurado, geminiGenerar } from './gemini';
-import type { Documento, StatementData, SalaryData, PortfolioData } from './tipos';
+import type { Documento, StatementData, SalaryData, PortfolioData, DocumentoClasificado } from './tipos';
 
-export type { Documento, StatementData, SalaryData, PortfolioData } from './tipos';
+export type { Documento, StatementData, SalaryData, PortfolioData, DocumentoClasificado } from './tipos';
 
 const SIN_PROVEEDOR =
   'Falta configurar un proveedor de IA en Vercel: ANTHROPIC_API_KEY (console.anthropic.com) ' +
@@ -44,3 +44,8 @@ export const extractSalary = async (b64: string) =>
 
 export const extractPortfolio = async (images: Documento[]) =>
   parseJson<PortfolioData>(await generar(PORTFOLIO_SYSTEM, images));
+
+// Para archivos subidos a mano, que llegan sin la pista de en que carpeta de
+// Drive estaban: el modelo clasifica y extrae en una sola llamada.
+export const clasificarDocumento = async (doc: Documento) =>
+  parseJson<DocumentoClasificado>(await generar(CLASSIFY_SYSTEM, [doc]));
