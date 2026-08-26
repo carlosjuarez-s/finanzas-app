@@ -1,6 +1,7 @@
 import './globals.css';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import Theme from './theme';
+import Sesion from './sesion';
 
 export const metadata = { title: 'Finanzas — Cierre mensual' };
 
@@ -15,7 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           recien en el cliente y la pagina parpadea sin estilos al cargar. */}
       <body>
         <AntdRegistry>
-          <Theme>{children}</Theme>
+          <Theme>
+            <Sesion />
+            {children}
+          </Theme>
         </AntdRegistry>
       </body>
     </html>

@@ -182,3 +182,51 @@ section > h2 {
 @media (prefers-reduced-motion: no-preference) {
   .barra { transition: width 0.5s ease; }
 }
+
+/* Sesion y login
+   ------------------------------------------------------------------ */
+
+.sesion {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 0 0;
+}
+
+.sesion .resultado { margin: 0; }
+
+.salir {
+  font: inherit;
+  font-size: 13px;
+  color: var(--tinta);
+  background: none;
+  border: 1px solid var(--linea);
+  border-radius: 6px;
+  /* 36px de alto: por debajo de eso errar el toque en el telefono es la regla. */
+  min-height: 36px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.salir:hover { border-color: var(--tinta); }
+
+.boton-google {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font: inherit;
+  font-weight: 600;
+  color: #1f1f1f;
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+  margin: 18px 0;
+  cursor: pointer;
+}
+
+.boton-google:hover { background: #f7f8f8; border-color: #c9ccd0; }
+.boton-google svg { flex: none; }

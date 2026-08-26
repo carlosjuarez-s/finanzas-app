@@ -40,6 +40,27 @@ Todo lo que devuelve el modelo pasa por las funciones de `lib/guardar.ts`:
 conversión de números tolerante al formato argentino, defaults en los textos,
 fechas inválidas a `null` y períodos validados contra `YYYY-MM`.
 
+## Quien entra a la app
+
+Dos puertas, nunca las dos a la vez: si `AUTH_GOOGLE_ID` y `AUTH_GOOGLE_SECRET`
+estan, se entra con Google; si no, queda el Basic Auth de `APP_PASSWORD`. Que la
+puerta vieja siga abierta cuando la nueva funciona seria un agujero, no un
+respaldo.
+
+Auth.js **no** restringe por email: agregar el proveedor de Google y nada mas
+deja entrar a cualquiera con cuenta de Google. La lista blanca es nuestra
+(`lib/auth.ts`) y se aplica en dos lados a proposito:
+
+- En el callback `signIn`, que decide si se crea la sesion. Ahi ademas se exige
+  `email_verified` de Google: sin eso el email es un dato que el proveedor no
+  confirmo.
+- En el middleware, en **cada** request. Sacar un email de `AUTH_EMAILS` tiene
+  que echarlo en el siguiente request, no cuando venza su token dentro de 30
+  dias.
+
+`AUTH_EMAILS` vacia niega a todos. Es deliberado: una variable de entorno que se
+olvidaron de setear no puede terminar significando "que entre cualquiera".
+
 ## Credenciales de brokers
 
 Van cifradas por `lib/boveda.ts`, atadas a su fila por AAD. Tres reglas que no
