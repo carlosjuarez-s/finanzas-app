@@ -59,6 +59,24 @@ operar aunque se filtre (Binance con key de solo lectura) de una que puede hacer
 todo y solo está limitada por nuestro código (IOL, que usa usuario y contraseña
 de la cuenta).
 
+## Costo de entrada y ganancia
+
+`lib/costo.ts` es determinista y está cubierto por tests. Tres reglas que salieron
+de bugs reales del dominio:
+
+- **La unidad es el dólar.** Medir en pesos da la respuesta opuesta: un activo
+  puede subir 50% en pesos y ser pérdida en poder de compra. Cada transacción
+  guarda el tipo de cambio de **su** día; convertir todo al dólar de hoy borra
+  justo el efecto que se quiere medir.
+- **Los ratios de CEDEAR cambian.** Cuando pasa, la cantidad se multiplica y el
+  precio unitario baja igual. Si el costo no se ajusta por el factor, aparece una
+  pérdida enorme que nunca ocurrió. Se modela como evento del activo, no como
+  operación.
+- **Ante una cantidad que no cierra, avisar y no calcular.** `discrepancias()`
+  detecta que el broker informa más unidades que el libro y sugiere el factor. Es
+  preferible decir «acá pasó algo que no entiendo» a mostrar con confianza un
+  número inventado.
+
 ## Plata: determinista y con tests
 
 Las proyecciones (`lib/proyeccion.ts`) son matemática financiera, **nunca un

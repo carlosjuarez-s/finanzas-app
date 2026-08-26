@@ -31,6 +31,8 @@ mostrar números distintos del mismo mes.
 |---|---|
 | `/` | Cierre del mes, sync de Drive y subida manual de documentos |
 | `/gastos` | Servicios, alquiler y consumos: revisar y **corregir** lo que interpretó el modelo |
+| `/portafolio` | Tenencias consolidadas y ganancia por activo, en dólares |
+| `/conexiones` | Cuentas de inversión conectadas (Binance) |
 | `/historico` | Evolución mes a mes y en qué se fue la plata acumulada |
 | `/metas` | Metas de ahorro y cuándo se alcanzan según tu ritmo real |
 | `/proyeccion` | Simulador "qué pasa si ahorro X%" y supuestos editables |

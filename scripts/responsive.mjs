@@ -95,12 +95,19 @@ for (const ruta of rutas) {
       .filter(x => x.px > 0 && x.px < MIN_FUENTE)
       .slice(0, 6);
 
+    // Lo que se toca no siempre es el elemento medido: en una libreria de
+    // componentes, el <input> real vive dentro de un wrapper mas grande que es
+    // el que recibe el toque. Medir el input daba falsos positivos.
+    const WRAPPERS = '.ant-select, .ant-input-number, .ant-picker, .ant-input-affix-wrapper, label';
+    const areaTactil = el => (el.closest(WRAPPERS) ?? el).getBoundingClientRect();
+
     const tapChicos = [...document.querySelectorAll('button, a, input, select, [role="button"]')]
-      .map(el => ({ el, r: el.getBoundingClientRect() }))
+      .map(el => ({ el, r: areaTactil(el) }))
       .filter(({ r }) => r.width > 0 && r.height > 0 && r.height < MIN_TAP)
       .slice(0, 6)
       .map(({ el, r }) => ({
-        sel: el.tagName.toLowerCase(),
+        sel: el.tagName.toLowerCase() + (el.className && typeof el.className === 'string'
+          ? '.' + el.className.trim().split(/\s+/)[0] : ''),
         texto: (el.textContent ?? '').trim().slice(0, 20),
         alto: Math.round(r.height),
       }));

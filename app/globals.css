@@ -146,6 +146,11 @@ section > h2 {
   /* Objetivos tactiles: los botones chicos de antd miden 24px de alto. */
   .ant-btn-sm { min-height: 32px; }
 
+  /* Las flechitas de InputNumber miden 15px: imposibles de acertar con el dedo.
+     En un telefono se escribe el numero, no se sube de a uno. */
+  .ant-input-number-handler-wrap,
+  .ant-input-number-action { display: none !important; }
+
   .tabla-gemela { overflow-x: auto; }
   h1 { font-size: 22px; }
 }

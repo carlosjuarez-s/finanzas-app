@@ -110,6 +110,51 @@ export const goals = pgTable('goals', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Libro de transacciones. Es lo que las fotos del portafolio NO pueden dar:
+// una tenencia dice cuanto tenes, no cuanto pagaste. Sin esto no hay ganancia.
+//
+// Se guardan las operaciones y no un promedio ya calculado: con el libro entero
+// se puede computar cualquier metodo (promedio ponderado, FIFO) despues, incluso
+// retroactivamente. Guardar solo el promedio es una puerta que se cierra.
+export const transacciones = pgTable('transacciones', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  activo: text('activo').notNull(),                // BTC, AAPL, AL30
+  clase: text('clase').notNull(),                  // CRIPTO | CEDEAR | RENTA_FIJA | FCI | DOLAR
+  tipo: text('tipo').notNull(),                    // COMPRA | VENTA
+  fecha: text('fecha').notNull(),                  // YYYY-MM-DD
+  cantidad: numeric('cantidad', { precision: 20, scale: 8 }).notNull(),
+  precioUnitario: numeric('precio_unitario', { precision: 20, scale: 8 }).notNull(),
+  moneda: text('moneda').notNull(),                // ARS | USD
+  // El tipo de cambio del DIA de la operacion, no el de hoy: convertir todo al
+  // dolar actual borraria justamente el efecto que queremos medir.
+  tipoCambioDia: numeric('tipo_cambio_dia', { precision: 14, scale: 4 }),
+  comision: numeric('comision', { precision: 20, scale: 8 }).notNull().default('0'),
+  origen: text('origen').notNull(),                // MANUAL | BINANCE | IOL | FOTO
+  // Id de la operacion en la plataforma: evita duplicar al reimportar.
+  refExterna: text('ref_externa').unique(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Eventos del activo, no operaciones tuyas: cambios de ratio de CEDEAR, splits,
+// dividendos en acciones.
+//
+// Sin esto el calculo se rompe en silencio. Los ratios de CEDEAR cambian —en
+// enero de 2024 la CNV modifico 30 de golpe— y cuando pasa, tu cantidad se
+// multiplica y el precio unitario baja igual: el valor total no se mueve. Pero
+// comparar contra el precio de entrada viejo mostraria una perdida enorme que
+// nunca ocurrio.
+export const eventosActivo = pgTable('eventos_activo', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  activo: text('activo').notNull(),
+  fecha: text('fecha').notNull(),                  // YYYY-MM-DD
+  tipo: text('tipo').notNull(),                    // RATIO | SPLIT | DIVIDENDO_ACCIONES
+  // 4 si una unidad pasa a ser cuatro. La cantidad se multiplica por el factor
+  // y el costo unitario se divide por el mismo numero.
+  factor: numeric('factor', { precision: 14, scale: 6 }).notNull(),
+  notas: text('notas'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Conexiones a brokers y exchanges. El secreto va cifrado con AES-256-GCM
 // (lib/boveda.ts) y atado por AAD al id de esta fila, asi que no se puede mover
 // a otra conexion. La clave que lo abre vive en el entorno, nunca acá: quien se

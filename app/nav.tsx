@@ -7,7 +7,9 @@ const SECCIONES = [
   { href: '/', nombre: 'Cierre' },
   { href: '/gastos', nombre: 'Gastos' },
   { href: '/historico', nombre: 'Historico' },
+  { href: '/portafolio', nombre: 'Portafolio' },
   { href: '/metas', nombre: 'Metas' },
+  { href: '/conexiones', nombre: 'Conexiones' },
   { href: '/proyeccion', nombre: 'Proyeccion' },
 ];
 
