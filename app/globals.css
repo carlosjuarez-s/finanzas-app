@@ -66,6 +66,11 @@ section > h2 {
   margin-bottom: 12px;
 }
 .fila { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dotted var(--linea); }
+/* min-width:0 deja que el texto largo se corte en vez de estirar la fila: sin
+   esto un comercio como MERPAGO*SATTUCUMANDISTRIBUIDORA empuja el monto fuera
+   de la pantalla y aparece scroll horizontal en todo el sitio. */
+.fila > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.fila > :last-child { flex-shrink: 0; }
 .barra { height: 6px; background: var(--peso); border-radius: 0; margin-top: 4px; }
 .chip {
   font-family: var(--font-data); font-size: 11px;
@@ -112,6 +117,9 @@ section > h2 {
 .nav a {
   font-family: var(--font-data); font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.1em; color: var(--tinta-suave); text-decoration: none;
+  /* El padding vertical es lo que hace tocable el link: el texto solo mide 17px
+     de alto y en un telefono es dificil de acertar. */
+  display: inline-block; padding: 8px 0;
 }
 .nav a:hover { color: var(--tinta); }
 .nav a[aria-current='page'] { color: var(--tinta); border-bottom: 2px solid var(--tinta); }
@@ -120,6 +128,26 @@ section > h2 {
 .nota {
   font-size: 12px; color: var(--tinta-suave); border-left: 2px solid var(--linea);
   padding-left: 10px; margin: 12px 0;
+}
+
+/* Mobile. Esta app se usa sobre todo desde el celular, asi que estas reglas no
+   son un parche: son el caso principal. Verificado con scripts/responsive.mjs. */
+@media (max-width: 560px) {
+  /* La ecuacion del cierre en 5 columnas no entra en 375px y genera scroll
+     horizontal. Apilada se lee igual de bien, de arriba hacia abajo. */
+  .ledger { grid-template-columns: 1fr; gap: 2px; padding: 14px 0; }
+  .ledger .op { font-size: 15px; line-height: 1.2; }
+
+  /* El texto del SVG esta en unidades del viewBox (720 de ancho), asi que se
+     achica junto con el grafico: a 375px de pantalla, 10px quedan en 4,8px
+     reales e ilegibles. 24 unidades dan ~11px efectivos. */
+  .grafico .eje { font-size: 24px; }
+
+  /* Objetivos tactiles: los botones chicos de antd miden 24px de alto. */
+  .ant-btn-sm { min-height: 32px; }
+
+  .tabla-gemela { overflow-x: auto; }
+  h1 { font-size: 22px; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

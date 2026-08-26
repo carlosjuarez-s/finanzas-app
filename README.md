@@ -35,6 +35,21 @@ mostrar números distintos del mismo mes.
 | `/metas` | Metas de ahorro y cuándo se alcanzan según tu ritmo real |
 | `/proyeccion` | Simulador "qué pasa si ahorro X%" y supuestos editables |
 
+## Mobile
+
+Se usa desde el celular, así que el responsive se verifica midiendo y no a ojo:
+
+```bash
+npm run dev
+APP_PASSWORD=<password> npm run check:responsive http://127.0.0.1:3000 / /gastos /historico /metas /proyeccion
+```
+
+`scripts/responsive.mjs` abre cada ruta en un viewport de iPhone SE y falla si
+hay scroll horizontal, texto por debajo de 11px **efectivos** o botones de menos
+de 32px de alto. Detectó cosas que leyendo el CSS no se ven: los ejes del gráfico
+declarados a 10px quedaban en **4,8px reales**, porque el texto de un SVG se
+achica junto con su `viewBox`.
+
 ## Datos personales (PII)
 
 `lib/pii.ts` censura CUIT/CUIL, DNI, CBU, tarjeta, email y teléfono. **El alcance
