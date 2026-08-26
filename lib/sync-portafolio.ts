@@ -124,3 +124,29 @@ export async function resultadosPorActivo(precios: Record<string, number> = {}):
 }
 
 export { discrepancias };
+
+/**
+ * Ratio vigente de cada CEDEAR, acumulando los eventos cargados. Se usa para
+ * valuar: un CEDEAR vale el precio de la accion dividido por su ratio.
+ *
+ * Arranca en 1 y multiplica por cada factor, que es la misma cuenta que ajusta
+ * el costo de entrada. Si no hay eventos cargados para un activo, queda 1:1 y
+ * el valor va a estar mal — por eso conviene cargar el ratio real como evento
+ * inicial cuando se carga la primera compra de un CEDEAR.
+ */
+export async function ratiosVigentes(): Promise<Record<string, number>> {
+  const evs = await db.select().from(eventosActivo);
+  const salida: Record<string, number> = {};
+  for (const e of evs) {
+    const f = Number(e.factor);
+    if (Number.isFinite(f) && f > 0) salida[e.activo] = (salida[e.activo] ?? 1) * f;
+  }
+  return salida;
+}
+
+/** Clase de cada activo, segun como se cargo en el libro. */
+export async function clasesDeActivos(): Promise<{ activo: string; clase: string }[]> {
+  const filas = await db.selectDistinct({ activo: transacciones.activo, clase: transacciones.clase })
+    .from(transacciones);
+  return filas;
+}

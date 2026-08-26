@@ -36,6 +36,7 @@ mostrar números distintos del mismo mes.
 | `/historico` | Evolución mes a mes y en qué se fue la plata acumulada |
 | `/metas` | Metas de ahorro y cuándo se alcanzan según tu ritmo real |
 | `/proyeccion` | Simulador "qué pasa si ahorro X%" y supuestos editables |
+| `/analisis` | Reconciliación: qué falta cargar, qué no cuadra, qué conviene hacer |
 
 ## Mobile
 
@@ -51,6 +52,26 @@ hay scroll horizontal, texto por debajo de 11px **efectivos** o botones de menos
 de 32px de alto. Detectó cosas que leyendo el CSS no se ven: los ejes del gráfico
 declarados a 10px quedaban en **4,8px reales**, porque el texto de un SVG se
 achica junto con su `viewBox`.
+
+## Cotizaciones
+
+`lib/precios.ts` resuelve por tipo de activo, porque no hay una sola fuente que
+los cubra:
+
+| Activo | Fuente |
+|---|---|
+| Cripto | Ticker público de Binance, sin API key |
+| Dólar ARS | API argentina de cotizaciones (MEP, CCL, blue) |
+| CEDEAR | Precio del subyacente en EE.UU. **÷ su ratio** |
+
+El tercero merece explicación. Google Finance API no existe (deprecada en 2012) y
+`GOOGLEFINANCE` —que sí funciona como función de Sheets— **no trae la mayoría de
+los CEDEARs**. Pero un CEDEAR *es* una fracción de una acción estadounidense, y el
+ratio ya lo guardamos para que el cambio de ratio no rompa el costo. Entonces el
+valor sale de dividir. Las dos piezas encajan.
+
+Todo lo que falla devuelve `null`, no cero: la UI muestra «—» porque no saber
+cuánto vale algo y que valga cero son cosas distintas.
 
 ## Bóveda de credenciales
 
@@ -112,6 +133,24 @@ el cierre del mes se recalcula en el momento.
 Los gastos sueltos se pueden borrar; los consumos de tarjeta no. Borrar una línea
 dejaría el desglose sin cuadrar con el «TOTAL A PAGAR» del resumen, que es el
 número que efectivamente se paga.
+
+## Análisis y reconciliación
+
+Dos capas, y el orden es lo importante:
+
+1. **`lib/auditoria.ts` calcula los hallazgos.** Determinista y con tests: meses
+   sin recibo, huecos en la serie, un gasto recurrente que falta este mes,
+   tenencias sin precio de entrada, metas fuera de ritmo, conexiones caídas.
+2. **El modelo prioriza y explica** lo que la capa 1 ya encontró.
+
+Nunca al revés. Un LLM al que le pedís «revisá mis finanzas» devuelve hallazgos
+inventados con la misma prosa segura que los reales, y no hay forma de
+distinguirlos leyendo la respuesta. Si la app dice que falta el recibo de agosto,
+es porque comparó dos listas.
+
+Al modelo se le mandan **agregados mensuales, no filas** — no necesita ver cada
+consumo para decir que agosto fue caro — y todo pasa por `redactarProfundo()`
+antes de salir. La tabla `conexiones` no entra en este camino ni cifrada.
 
 ## Proyecciones
 

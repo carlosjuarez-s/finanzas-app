@@ -11,6 +11,7 @@ const SECCIONES = [
   { href: '/metas', nombre: 'Metas' },
   { href: '/conexiones', nombre: 'Conexiones' },
   { href: '/proyeccion', nombre: 'Proyeccion' },
+  { href: '/analisis', nombre: 'Analisis' },
 ];
 
 export default function Nav() {

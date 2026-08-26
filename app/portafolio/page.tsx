@@ -1,7 +1,8 @@
 import { desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { portfolioSnapshots, transacciones } from '@/db/schema';
-import { resultadosPorActivo, discrepancias } from '@/lib/sync-portafolio';
+import { resultadosPorActivo, discrepancias, ratiosVigentes, clasesDeActivos } from '@/lib/sync-portafolio';
+import { preciosDePortafolio } from '@/lib/precios';
 import { fmtUsd, fmtPct } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Portafolio() {
   let resultados, errores, tenencias, hayTx = false;
+  let sinPrecio: string[] = [];
   try {
     // Ultimo snapshot de cada plataforma: es lo que el broker dice que tenes.
     const snaps = await db.query.portfolioSnapshots.findMany({
@@ -22,12 +24,19 @@ export default async function Portafolio() {
       valorUsd: p.valorUsd === null ? null : Number(p.valorUsd),
     })));
 
-    // Precio implicito de lo que informa el broker: valor / cantidad. Cuando haya
-    // una fuente de cotizaciones propia, se reemplaza por ella.
+    // Precio implicito de lo que informo el broker en el ultimo snapshot: sirve
+    // de piso cuando la cotizacion en vivo no se consigue.
     const precios: Record<string, number> = {};
     for (const t of tenencias) {
       if (t.valorUsd !== null && t.cantidad > 0) precios[t.activo] = t.valorUsd / t.cantidad;
     }
+
+    // Cotizaciones en vivo. Si la red falla, cada fuente devuelve vacio y quedan
+    // los precios del snapshot: nunca se muestra un cero como si fuera un valor.
+    const [clases, ratios] = await Promise.all([clasesDeActivos(), ratiosVigentes()]);
+    const enVivo = await preciosDePortafolio(clases, ratios);
+    Object.assign(precios, enVivo.precios);
+    sinPrecio = enVivo.sinPrecio;
 
     ({ resultados, errores } = await resultadosPorActivo(precios));
     hayTx = (await db.select({ id: transacciones.id }).from(transacciones).limit(1)).length > 0;
@@ -95,6 +104,13 @@ export default async function Portafolio() {
       {errores.map((e, i) => (
         <p className="nota" key={i} style={{ borderLeftColor: 'var(--alerta)' }}>{e}</p>
       ))}
+
+      {sinPrecio.length > 0 && (
+        <p className="nota">
+          Sin cotización para {sinPrecio.join(', ')}. Se muestra «—» en vez de un cero:
+          no saber cuánto vale algo y que valga cero son cosas distintas.
+        </p>
+      )}
 
       <section>
         <h2>Por activo</h2>

@@ -60,6 +60,11 @@ export const extractPortfolio = async (images: Documento[]) =>
 export const clasificarDocumento = async (doc: Documento) =>
   redactarProfundo(parseJson<DocumentoClasificado>(await generar(CLASSIFY_SYSTEM, [doc])));
 
+// Analisis narrativo sobre datos ya agregados y redactados. El JSON que entra
+// lo arma lib/analisis.ts; aca solo se despacha al proveedor disponible.
+export const generarAnalisis = async <T>(system: string, datos: string): Promise<T> =>
+  parseJson<T>(await generar(system, [], `Datos:\n${datos}`));
+
 // Carga por descripcion escrita. Aca la redaccion SI protege de verdad: el texto
 // se limpia antes de salir hacia el proveedor, no despues.
 export async function interpretarTexto(descripcion: string) {

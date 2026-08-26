@@ -77,6 +77,18 @@ de bugs reales del dominio:
   preferible decir «acá pasó algo que no entiendo» a mostrar con confianza un
   número inventado.
 
+## El modelo no calcula
+
+Vale para las proyecciones, para el costo de entrada y para el análisis. La
+división es siempre la misma: **el código calcula, el modelo explica**.
+
+`lib/auditoria.ts` detecta los huecos y las inconsistencias; el modelo recibe esos
+hallazgos ya hechos y los prioriza. Si algún día se invierte ese orden, la app
+empieza a afirmar cosas plausibles y falsas con total seguridad, y nadie lo nota
+leyendo la respuesta.
+
+Al modelo van agregados, nunca filas crudas, y siempre por `redactarProfundo()`.
+
 ## Plata: determinista y con tests
 
 Las proyecciones (`lib/proyeccion.ts`) son matemática financiera, **nunca un
