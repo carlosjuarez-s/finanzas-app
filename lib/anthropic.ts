@@ -23,7 +23,9 @@ const bloque = (d: Documento) =>
     ? { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: d.base64 } }
     : { type: 'image' as const, source: { type: 'base64' as const, media_type: d.mediaType as 'image/png', data: d.base64 } };
 
-export async function anthropicGenerar(system: string, docs: Documento[]): Promise<string> {
+export async function anthropicGenerar(
+  system: string, docs: Documento[], texto = 'Extrae el JSON.',
+): Promise<string> {
   _client ??= new Anthropic();
   const msg = await _client.messages.create({
     model: MODEL,
@@ -31,7 +33,7 @@ export async function anthropicGenerar(system: string, docs: Documento[]): Promi
     system,
     messages: [{
       role: 'user',
-      content: [...docs.map(bloque), { type: 'text', text: 'Extrae el JSON.' }],
+      content: [...docs.map(bloque), { type: 'text', text: texto }],
     }],
   });
   return msg.content.filter(b => b.type === 'text').map(b => b.text).join('');

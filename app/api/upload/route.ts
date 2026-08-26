@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, salaries } from '@/db/schema';
+import { statements, salaries, gastos } from '@/db/schema';
 import { clasificarDocumento, faltaProveedor } from '@/lib/extract';
-import { guardarStatement, guardarSalary, guardarPortfolio } from '@/lib/guardar';
+import { guardarStatement, guardarSalary, guardarPortfolio, guardarGasto } from '@/lib/guardar';
 import { guardarCierres, periodoSiguiente } from '@/lib/cierre';
 import { mensajeDeError } from '@/lib/errores';
 
@@ -44,11 +44,12 @@ export async function POST(req: NextRequest) {
       // veces el mismo archivo, aunque se llame distinto, no lo duplica.
       const fileId = `upload:${createHash('sha256').update(buf).digest('hex')}`;
 
-      const [yaSt, yaSal] = await Promise.all([
+      const [yaSt, yaSal, yaGasto] = await Promise.all([
         db.select({ fileId: statements.fileId }).from(statements).where(inArray(statements.fileId, [fileId])),
         db.select({ fileId: salaries.fileId }).from(salaries).where(inArray(salaries.fileId, [fileId])),
+        db.select({ fileId: gastos.fileId }).from(gastos).where(inArray(gastos.fileId, [fileId])),
       ]);
-      if (yaSt.length || yaSal.length) {
+      if (yaSt.length || yaSal.length || yaGasto.length) {
         resultados.push({ nombre, estado: 'duplicado', detalle: 'Ya estaba cargado.' });
         continue;
       }
@@ -71,6 +72,19 @@ export async function POST(req: NextRequest) {
           // El sueldo de un mes paga los consumos del siguiente: los dos cierres cambian.
           periodos.forEach(p => { periodosTocados.add(p); periodosTocados.add(periodoSiguiente(p)); });
           resultados.push({ nombre, estado: 'cargado', tipo: 'Recibo de sueldo', detalle: `${cantidad} ${cantidad === 1 ? 'recibo' : 'recibos'} · ${periodos.join(', ')}` });
+          break;
+        }
+        case 'GASTO': {
+          // Una boleta de servicio o un papel fotografiado: es el tipo de
+          // documento que el mimetype no distingue, solo el contenido.
+          const { periodo, monto } = await guardarGasto(
+            doc.datos, file.type === 'application/pdf' ? 'BOLETA' : 'FOTO', fileId,
+          );
+          periodosTocados.add(periodo);
+          resultados.push({
+            nombre, estado: 'cargado', tipo: 'Gasto',
+            detalle: `${doc.datos.concepto} · ${periodo} · $ ${monto.toLocaleString('es-AR')}`,
+          });
           break;
         }
         case 'PORTFOLIO': {

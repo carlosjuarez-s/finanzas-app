@@ -24,6 +24,8 @@ export const consumos = pgTable('consumos', {
   cuota: text('cuota'),
   montoArs: numeric('monto_ars', { precision: 14, scale: 2 }).notNull(),
   montoUsd: numeric('monto_usd', { precision: 10, scale: 2 }).notNull(),
+  // Lo corrigio una persona: el dato manda sobre lo que interpreto el modelo.
+  corregido: boolean('corregido').notNull().default(false),
 });
 
 export const salaries = pgTable('salaries', {
@@ -31,6 +33,7 @@ export const salaries = pgTable('salaries', {
   fileId: text('file_id').notNull(),
   periodo: text('periodo').notNull().unique(),
   netoArs: numeric('neto_ars', { precision: 14, scale: 2 }).notNull(),
+  corregido: boolean('corregido').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -69,6 +72,29 @@ export const monthlyCloses = pgTable('monthly_closes', {
   tasaAhorro: numeric('tasa_ahorro', { precision: 6, scale: 2 }),
   porCategoria: jsonb('por_categoria').notNull(),
   calculadoAt: timestamp('calculado_at').defaultNow().notNull(),
+});
+
+// Gastos que no vienen de un resumen de tarjeta: boletas de servicios, el
+// alquiler (que muchas veces es un papel sin version digital) y lo que se carga
+// escribiendolo. Tabla aparte de `consumos` porque estos no cuelgan de ningun
+// statement, pero suman al mismo cierre mensual.
+export const gastos = pgTable('gastos', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  // Hash del archivo si vino de uno; null si se cargo por texto.
+  fileId: text('file_id').unique(),
+  periodo: text('periodo').notNull(),          // YYYY-MM al que imputa
+  fecha: text('fecha'),                        // YYYY-MM-DD si el comprobante la trae
+  concepto: text('concepto').notNull(),        // "Luz - EDET", "Alquiler septiembre"
+  categoria: text('categoria').notNull(),
+  montoArs: numeric('monto_ars', { precision: 14, scale: 2 }).notNull(),
+  montoUsd: numeric('monto_usd', { precision: 10, scale: 2 }).notNull().default('0'),
+  origen: text('origen').notNull(),            // BOLETA | FOTO | TEXTO | MANUAL
+  // Marca si una persona corrigio lo que interpreto el modelo: sirve para saber
+  // en que datos confiar y para no pisarlos si se reprocesa el documento.
+  corregido: boolean('corregido').notNull().default(false),
+  notas: text('notas'),
+  raw: jsonb('raw'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 // Metas de ahorro. La moneda importa: una meta en pesos a dos años no dice nada

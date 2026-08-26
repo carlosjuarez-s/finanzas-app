@@ -23,12 +23,27 @@ export type ResultadoArchivo = {
   detalle?: string;
 };
 
+// Un gasto suelto: boleta de servicio, alquiler, comprobante informal o texto.
+export type GastoData = {
+  periodo: string;
+  fecha: string | null;
+  concepto: string;
+  categoria: string;
+  montoArs: number;
+  montoUsd: number;
+};
+
 // Resultado del upload manual: el tipo lo decide el modelo, asi que la union
 // obliga a chequearlo antes de tocar los datos.
 export type DocumentoClasificado =
   | { tipo: 'STATEMENT'; datos: StatementData }
   | { tipo: 'SALARY'; datos: SalaryData }
+  | { tipo: 'GASTO'; datos: GastoData }
   | { tipo: 'PORTFOLIO'; datos: PortfolioData }
+  | { tipo: 'DESCONOCIDO'; datos: { motivo?: string } };
+
+export type TextoClasificado =
+  | { tipo: 'GASTO'; datos: GastoData }
   | { tipo: 'DESCONOCIDO'; datos: { motivo?: string } };
 
 export type PortfolioData = {

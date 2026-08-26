@@ -1,6 +1,6 @@
 import { desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, salaries, monthlyCloses } from '@/db/schema';
+import { statements, salaries, monthlyCloses, gastos } from '@/db/schema';
 
 export type Cierre = {
   periodo: string;
@@ -38,9 +38,14 @@ export async function calcularCierre(periodo: string): Promise<Cierre> {
     where: inArray(salaries.periodo, [periodoAnterior(periodo), periodo]),
     orderBy: desc(salaries.periodo),
   });
+  // Servicios, alquiler y demas gastos sin resumen: no cuelgan de un statement
+  // pero salen del mismo bolsillo, asi que suman al gasto del mes.
+  const sueltos = await db.select().from(gastos).where(eq(gastos.periodo, periodo));
 
-  const gastoArs = sts.reduce((s, st) => s + Number(st.totalArs), 0);
-  const gastoUsd = sts.reduce((s, st) => s + Number(st.totalUsd), 0);
+  const gastoArs = sts.reduce((s, st) => s + Number(st.totalArs), 0)
+    + sueltos.reduce((s, g) => s + Number(g.montoArs), 0);
+  const gastoUsd = sts.reduce((s, st) => s + Number(st.totalUsd), 0)
+    + sueltos.reduce((s, g) => s + Number(g.montoUsd), 0);
   const percepArs = sts.reduce((s, st) => s + Number(st.percepArs), 0);
   const ingresoArs = Number(salary?.netoArs ?? 0);
   const ahorroArs = ingresoArs - gastoArs;
@@ -48,6 +53,9 @@ export async function calcularCierre(periodo: string): Promise<Cierre> {
   const porCategoria: Record<string, number> = {};
   for (const st of sts) for (const c of st.consumos) {
     porCategoria[c.categoria] = (porCategoria[c.categoria] ?? 0) + Number(c.montoArs);
+  }
+  for (const g of sueltos) {
+    porCategoria[g.categoria] = (porCategoria[g.categoria] ?? 0) + Number(g.montoArs);
   }
 
   return {
@@ -60,13 +68,16 @@ export async function calcularCierre(periodo: string): Promise<Cierre> {
 // Recalcula y guarda los meses indicados. Sin argumento, todos los que tengan
 // resumenes cargados: despues de un sync no se sabe de antemano que meses toco.
 export async function guardarCierres(periodos?: string[]): Promise<string[]> {
-  // Un cierre solo tiene sentido para meses con resumenes cargados: son los que
-  // el dashboard puede mostrar. Filtrar contra esta lista evita crear filas de
-  // meses futuros vacios cuando entra un recibo adelantado, que se verian como
-  // un mes de 100% de ahorro.
-  const conResumenes = (await db.selectDistinct({ periodo: statements.periodo }).from(statements))
-    .map(r => r.periodo);
-  const objetivo = periodos ? conResumenes.filter(p => periodos.includes(p)) : conResumenes;
+  // Un cierre solo tiene sentido para meses con gasto cargado: son los que el
+  // dashboard puede mostrar. Filtrar contra esta lista evita crear filas de meses
+  // futuros vacios cuando entra un recibo adelantado, que se verian como un mes
+  // de 100% de ahorro. Un mes puede tener solo alquiler y servicios, sin tarjeta.
+  const [conResumenes, conGastos] = await Promise.all([
+    db.selectDistinct({ periodo: statements.periodo }).from(statements),
+    db.selectDistinct({ periodo: gastos.periodo }).from(gastos),
+  ]);
+  const conDatos = [...new Set([...conResumenes, ...conGastos].map(r => r.periodo))];
+  const objetivo = periodos ? conDatos.filter(p => periodos.includes(p)) : conDatos;
 
   for (const periodo of objetivo) {
     const c = await calcularCierre(periodo);

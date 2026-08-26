@@ -22,6 +22,13 @@
       "when": 1787684244750,
       "tag": "0002_metas_y_supuestos",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787750734163,
+      "tag": "0003_gastos_y_correcciones",
+      "breakpoints": true
     }
   ]
 }

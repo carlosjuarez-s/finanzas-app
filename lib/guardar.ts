@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, consumos, salaries, portfolioSnapshots, positions } from '@/db/schema';
-import type { StatementData, SalaryData, PortfolioData } from './tipos';
+import { statements, consumos, salaries, portfolioSnapshots, positions, gastos } from '@/db/schema';
+import { CATEGORIAS } from './prompts';
+import type { StatementData, SalaryData, PortfolioData, GastoData } from './tipos';
 
 // Insercion compartida entre el sync de Drive y el upload manual. El fileId es
 // la identidad del documento de origen: el id de Drive, o "upload:<hash>" para
@@ -86,6 +87,41 @@ export async function guardarSalary(fileId: string, data: SalaryData) {
       });
   }
   return { cantidad: recibos.length, periodos: recibos.map(r => r.periodo) };
+}
+
+// El modelo puede devolver una categoria que no esta en la lista: se acepta como
+// "Otros" en vez de rechazar el gasto, y despues se corrige a mano.
+const categoriaValida = (v: unknown): string => {
+  const c = texto(v, 'Otros');
+  return (CATEGORIAS as readonly string[]).includes(c) ? c : 'Otros';
+};
+
+export type OrigenGasto = 'BOLETA' | 'FOTO' | 'TEXTO' | 'MANUAL';
+
+export async function guardarGasto(
+  data: GastoData, origen: OrigenGasto, fileId: string | null = null,
+) {
+  if (!periodoValido(data.periodo)) {
+    throw new Error(`El periodo del gasto no tiene formato YYYY-MM (vino "${data.periodo}").`);
+  }
+  const monto = num(data.montoArs);
+  if (monto <= 0 && num(data.montoUsd) <= 0) {
+    throw new Error('No se pudo leer un importe mayor a cero en el comprobante.');
+  }
+
+  const [g] = await db.insert(gastos).values({
+    fileId,
+    periodo: data.periodo,
+    fecha: typeof data.fecha === 'string' && data.fecha.trim() ? data.fecha.trim() : null,
+    concepto: texto(data.concepto, 'Gasto sin descripcion'),
+    categoria: categoriaValida(data.categoria),
+    montoArs: String(monto),
+    montoUsd: String(num(data.montoUsd)),
+    origen,
+    raw: data,
+  }).returning({ id: gastos.id });
+
+  return { id: g.id, periodo: data.periodo, monto };
 }
 
 export async function guardarPortfolio(periodo: string, data: PortfolioData) {

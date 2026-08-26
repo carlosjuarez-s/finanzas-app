@@ -9,7 +9,9 @@ const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash';
 
 export const geminiConfigurado = () => Boolean(process.env.GEMINI_API_KEY?.trim());
 
-export async function geminiGenerar(system: string, docs: Documento[]): Promise<string> {
+export async function geminiGenerar(
+  system: string, docs: Documento[], texto = 'Extrae el JSON.',
+): Promise<string> {
   _client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const res = await _client.models.generateContent({
     model: MODEL,
@@ -18,12 +20,12 @@ export async function geminiGenerar(system: string, docs: Documento[]): Promise<
       role: 'user',
       parts: [
         ...docs.map(d => ({ inlineData: { mimeType: d.mediaType, data: d.base64 } })),
-        { text: 'Extrae el JSON.' },
+        { text: texto },
       ],
     }],
     config: { systemInstruction: system, responseMimeType: 'application/json' },
   });
-  const texto = res.text;
-  if (!texto?.trim()) throw new Error('Gemini no devolvio texto (puede haber bloqueado el contenido).');
-  return texto;
+  const salida = res.text;
+  if (!salida?.trim()) throw new Error('Gemini no devolvio texto (puede haber bloqueado el contenido).');
+  return salida;
 }

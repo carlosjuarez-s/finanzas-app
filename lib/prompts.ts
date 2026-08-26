@@ -4,7 +4,28 @@
 export const CATEGORIAS = [
   'Suscripciones', 'Servicios', 'Salud y deporte', 'Supermercado y comida',
   'Compras y hogar', 'Cuotas', 'Comisiones bancarias', 'Impuestos y percepciones',
+  // Gastos que no pasan por la tarjeta y antes no tenian donde caer.
+  'Alquiler', 'Transporte', 'Educacion', 'Otros',
 ] as const;
+
+// Esquema de un gasto suelto: boleta de servicio, alquiler, o cualquier
+// comprobante informal fotografiado.
+export const GASTO_SPEC = `{
+  "periodo": "YYYY-MM",             // mes al que corresponde el gasto
+  "fecha": "YYYY-MM-DD" | null,     // si el comprobante la muestra
+  "concepto": string,               // "Luz - EDET", "Alquiler septiembre", "Internet Fibertel"
+  "categoria": string,              // una de: ${CATEGORIAS.join(', ')}
+  "montoArs": number,
+  "montoUsd": number                // 0 salvo que el comprobante este en dolares
+}
+
+Reglas:
+- Servicios tipicos argentinos: EDET/EDENOR/EDESUR (luz), Metrogas/Naturgy (gas), Aguas/OSN (agua), Fibertel/Telecentro/Movistar/Personal/Claro (internet, telefonia). Todos van en categoria "Servicios".
+- El alquiler va en "Alquiler", aunque sea un recibo escrito a mano o un papel fotografiado.
+- Si el comprobante muestra "total a pagar" y tambien "segundo vencimiento" (mas caro), usar el PRIMER vencimiento: es lo que se paga en termino.
+- Si no se ve el periodo, deducirlo de la fecha de vencimiento. Si tampoco, usar el mes de la fecha de emision.
+- Los montos vienen en formato argentino (1.234,56): convertirlos a number estandar.
+- No inventes un monto: si el importe no se lee con claridad, es preferible DESCONOCIDO.`;
 
 // Los esquemas viven aparte del encabezado para que el clasificador
 // (CLASSIFY_SYSTEM) reuse exactamente las mismas reglas validadas y no haya dos
@@ -78,8 +99,11 @@ export const CLASSIFY_SYSTEM = `Sos un clasificador y extractor de documentos fi
 Identifica el tipo antes de extraer:
 - STATEMENT: resumen o estado de cuenta de tarjeta de credito, con consumos y total a pagar.
 - SALARY: recibo de sueldo o liquidacion de haberes, con neto percibido.
+- GASTO: un unico gasto. Boleta de servicio (luz, agua, gas, internet, telefonia), impuesto, o un comprobante informal: un recibo de alquiler escrito a mano, un ticket, un papel fotografiado. Si es un solo importe a pagar y no una lista de consumos, es GASTO y no STATEMENT.
 - PORTFOLIO: tenencias de inversion (Binance, IOL, brokers), normalmente una captura.
 - DESCONOCIDO: cualquier otra cosa, o un documento demasiado ilegible para confiar en lo extraido.
+
+La foto puede estar torcida, con sombras o ser de un papel manuscrito: eso es esperable y no es motivo para devolver DESCONOCIDO. Lo es no poder leer el importe con confianza.
 
 Ante la duda usa DESCONOCIDO: un dato mal clasificado ensucia el cierre del mes y es peor que no cargar nada.
 
@@ -93,5 +117,25 @@ ${STATEMENT_SPEC}
 ## tipo = SALARY
 ${SALARY_SPEC}
 
+## tipo = GASTO
+${GASTO_SPEC}
+
 ## tipo = PORTFOLIO
 ${PORTFOLIO_SPEC}`;
+
+// Carga por texto: "pague 85000 de alquiler en septiembre". El texto ya viene
+// redactado de datos personales antes de llegar al modelo.
+export const TEXTO_SYSTEM = `Interpretas una descripcion escrita a mano alzada de un gasto y devolves SOLO JSON valido, sin markdown:
+
+{ "tipo": "GASTO" | "DESCONOCIDO", "datos": { ... } }
+
+Si se entiende el gasto, "datos" respeta este esquema:
+
+${GASTO_SPEC}
+
+Reglas propias del texto libre:
+- Los montos pueden venir informales: "85 lucas" y "85 mil" son 85000; "1,2 palos" son 1200000.
+- Los meses pueden venir por nombre ("septiembre", "sept") o relativos ("este mes", "el mes pasado"). Hoy es {HOY}: resolvelos contra esa fecha.
+- Si no se aclara el mes, usar el mes actual.
+- Si no hay un importe reconocible, devolver DESCONOCIDO con { "motivo": "..." }. Nunca inventar un numero.
+- Si la descripcion menciona varios gastos, quedarse con el principal y aclararlo en "concepto".`;

@@ -30,9 +30,43 @@ mostrar números distintos del mismo mes.
 | Ruta | Qué hace |
 |---|---|
 | `/` | Cierre del mes, sync de Drive y subida manual de documentos |
+| `/gastos` | Servicios, alquiler y consumos: revisar y **corregir** lo que interpretó el modelo |
 | `/historico` | Evolución mes a mes y en qué se fue la plata acumulada |
 | `/metas` | Metas de ahorro y cuándo se alcanzan según tu ritmo real |
 | `/proyeccion` | Simulador "qué pasa si ahorro X%" y supuestos editables |
+
+## Datos personales (PII)
+
+`lib/pii.ts` censura CUIT/CUIL, DNI, CBU, tarjeta, email y teléfono. **El alcance
+real es asimétrico y conviene tenerlo claro:**
+
+| Camino | ¿Se censura antes del modelo? |
+|---|---|
+| Texto que escribís (`/api/gasto-texto`) | **Sí.** Se redacta antes de salir. |
+| Lo que el modelo devuelve (columna `raw`) | **Sí.** Se redacta antes de guardarlo. |
+| PDFs e imágenes | **No es posible.** |
+
+El último caso no es una omisión: el modelo tiene que *leer* el documento para
+extraer algo, y taparle el CUIL antes exigiría OCR — o sea, el mismo modelo. La
+boleta viaja intacta al proveedor. Preferimos decirlo a mostrar un cartel de
+"PII censurada" que sería falso en el caso más común.
+
+El riesgo grande de esta función no es dejar pasar un dato, es **sobre-censurar**:
+un DNI son 7-8 dígitos y un importe en pesos también. Por eso todo lo ambiguo se
+ancla a su etiqueta (`DNI 12.345.678`) y solo se censura suelto lo inconfundible
+(CUIT con guiones, email, 16 o 22 dígitos seguidos). Hay un test dedicado a que
+los montos sobrevivan intactos.
+
+## Corregir lo que el modelo interpretó mal
+
+Todo lo extraído se puede rectificar en `/gastos`: concepto, categoría y monto de
+gastos y consumos, y el neto del sueldo. Lo corregido queda marcado con
+`corregido = true` — un dato que revisó una persona vale más que uno inferido — y
+el cierre del mes se recalcula en el momento.
+
+Los gastos sueltos se pueden borrar; los consumos de tarjeta no. Borrar una línea
+dejaría el desglose sin cuadrar con el «TOTAL A PAGAR» del resumen, que es el
+número que efectivamente se paga.
 
 ## Proyecciones
 
