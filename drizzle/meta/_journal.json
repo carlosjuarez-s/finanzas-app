@@ -29,6 +29,13 @@
       "when": 1787750734163,
       "tag": "0003_gastos_y_correcciones",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787757343064,
+      "tag": "0004_conexiones",
+      "breakpoints": true
     }
   ]
 }

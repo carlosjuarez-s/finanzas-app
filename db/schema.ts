@@ -110,6 +110,28 @@ export const goals = pgTable('goals', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Conexiones a brokers y exchanges. El secreto va cifrado con AES-256-GCM
+// (lib/boveda.ts) y atado por AAD al id de esta fila, asi que no se puede mover
+// a otra conexion. La clave que lo abre vive en el entorno, nunca acá: quien se
+// lleve un dump de la base no se lleva credenciales utilizables.
+//
+// No hay columna "solo lectura garantizada": eso es una propiedad de la
+// plataforma y vive en lib/plataformas.ts, para que no pueda quedar mal escrita
+// en una fila y mentirle a la UI.
+export const conexiones = pgTable('conexiones', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  plataforma: text('plataforma').notNull(),        // BINANCE | IOL
+  etiqueta: text('etiqueta').notNull(),            // "Binance principal"
+  secreto: jsonb('secreto').notNull(),             // { v, iv, tag, datos }
+  pista: text('pista').notNull(),                  // ••••4f2a, para reconocerla
+  estado: text('estado').notNull().default('ACTIVA'), // ACTIVA | VENCIDA | ERROR
+  ultimoSync: timestamp('ultimo_sync'),
+  // Siempre censurado antes de escribirse: un error de la API puede traer la
+  // credencial en el texto (lib/secretos.ts).
+  ultimoError: text('ultimo_error'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Clave-valor para los supuestos de proyeccion (retornos, tipo de cambio) y lo
 // que se quiera hacer configurable despues, sin una migracion por cada opcion.
 export const settings = pgTable('settings', {

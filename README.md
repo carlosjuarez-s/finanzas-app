@@ -50,6 +50,34 @@ de 32px de alto. Detectó cosas que leyendo el CSS no se ven: los ejes del gráf
 declarados a 10px quedaban en **4,8px reales**, porque el texto de un SVG se
 achica junto con su `viewBox`.
 
+## Bóveda de credenciales
+
+`lib/boveda.ts` cifra con **AES-256-GCM** las credenciales de brokers antes de
+guardarlas. La clave maestra vive en `BOVEDA_CLAVE_1` (variable de entorno),
+nunca en la base: quien se lleve un dump de Postgres no se lleva nada utilizable.
+
+Tres decisiones que no son obvias:
+
+- **GCM y no CBC.** GCM autentica además de cifrar, así que un dato alterado
+  falla al descifrar en vez de devolver basura silenciosa.
+- **Cada secreto está atado a su fila** por AAD (`conexion:<id>`). Sin eso,
+  alguien con escritura en la base podría copiar las credenciales de IOL a una
+  fila rotulada «Binance, solo lectura» y hacer que la app las use creyendo otra
+  cosa. Hay un test para exactamente ese ataque.
+- **La versión de clave se guarda con el dato**, así rotar no pierde las
+  conexiones: se cifra con la nueva y lo viejo se sigue leyendo hasta que
+  `rotarCifrado()` lo migre.
+
+`lib/secretos.ts` censura credenciales en los mensajes de error. El caso real:
+Binance manda la API key en un header y la firma en el query string, y cuando
+algo falla el error trae la URL entera — que después va a `ultimo_error` y queda
+archivada en claro. Se censura por valor conocido y por patrón, con el mismo
+cuidado que la redacción de PII: **un error censurado tiene que seguir sirviendo
+para diagnosticar**, así que los ids de operación y los tickers no se tocan.
+
+Nada de esto sale nunca en una respuesta HTTP: `listarConexiones()` devuelve un
+tipo sin el secreto, y descifrar exige llamar explícitamente a `leerCredencial()`.
+
 ## Datos personales (PII)
 
 `lib/pii.ts` censura CUIT/CUIL, DNI, CBU, tarjeta, email y teléfono. **El alcance

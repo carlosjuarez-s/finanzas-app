@@ -40,6 +40,25 @@ Todo lo que devuelve el modelo pasa por las funciones de `lib/guardar.ts`:
 conversión de números tolerante al formato argentino, defaults en los textos,
 fechas inválidas a `null` y períodos validados contra `YYYY-MM`.
 
+## Credenciales de brokers
+
+Van cifradas por `lib/boveda.ts`, atadas a su fila por AAD. Tres reglas que no
+se negocian:
+
+- **Nunca en una respuesta HTTP.** `listarConexiones()` devuelve un tipo sin el
+  secreto; descifrar exige llamar a `leerCredencial()` a propósito. Si agregás un
+  `select()` completo sobre `conexiones`, estás arrastrando el secreto cifrado a
+  donde no va.
+- **Nunca a un modelo de IA.** Ninguna función de extracción toca `conexiones`.
+- **Nunca en un log o en `ultimo_error` sin censurar.** Un error de Binance trae
+  la API key en el texto: pasarlo por `errorCensurado()` primero.
+
+Y al mostrar una conexión, decir la verdad sobre qué la protege:
+`lecturaGarantizadaPorLaPlataforma` distingue una credencial que **no puede**
+operar aunque se filtre (Binance con key de solo lectura) de una que puede hacer
+todo y solo está limitada por nuestro código (IOL, que usa usuario y contraseña
+de la cuenta).
+
 ## Plata: determinista y con tests
 
 Las proyecciones (`lib/proyeccion.ts`) son matemática financiera, **nunca un
