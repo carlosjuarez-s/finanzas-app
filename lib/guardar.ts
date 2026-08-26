@@ -1,8 +1,9 @@
+import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, consumos, salaries, portfolioSnapshots, positions, gastos } from '@/db/schema';
+import { statements, consumos, salaries, portfolioSnapshots, positions, gastos, transacciones } from '@/db/schema';
 import { CATEGORIAS } from './prompts';
-import type { StatementData, SalaryData, PortfolioData, GastoData } from './tipos';
+import type { StatementData, SalaryData, PortfolioData, GastoData, MovimientoData } from './tipos';
 
 // Insercion compartida entre el sync de Drive y el upload manual. El fileId es
 // la identidad del documento de origen: el id de Drive, o "upload:<hash>" para
@@ -95,6 +96,54 @@ const categoriaValida = (v: unknown): string => {
   const c = texto(v, 'Otros');
   return (CATEGORIAS as readonly string[]).includes(c) ? c : 'Otros';
 };
+
+/**
+ * Movimientos de un export de broker. Devuelve cuantos entraron y cuantos ya
+ * estaban: subir dos veces el mismo CSV no puede duplicar el historial, y es
+ * exactamente lo que uno hace cuando no esta seguro de si ya lo subio.
+ *
+ * La identidad de una operacion es su contenido, porque el CSV rara vez trae un
+ * id: mismo activo, misma fecha, misma cantidad y mismo precio es la misma
+ * operacion. Dos compras identicas el mismo dia colapsan en una — es el precio
+ * de no tener id, y preferible a duplicar todo el historial.
+ */
+export async function guardarMovimientos(movs: MovimientoData[], origen: string) {
+  let nuevos = 0, repetidos = 0, descartados = 0;
+
+  for (const m of movs) {
+    const activo = texto(m?.activo, '').toUpperCase();
+    const cantidad = num(m?.cantidad);
+    const precio = num(m?.precioUnitario);
+    const fecha = texto(m?.fecha, '');
+
+    if (!activo || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || cantidad <= 0) { descartados++; continue; }
+
+    const huella = createHash('sha256')
+      .update(`${origen}|${activo}|${m.tipo}|${fecha}|${cantidad}|${precio}`)
+      .digest('hex').slice(0, 32);
+
+    const [fila] = await db.insert(transacciones).values({
+      activo,
+      clase: texto(m?.clase, 'CRIPTO').toUpperCase(),
+      tipo: m?.tipo === 'VENTA' ? 'VENTA' : 'COMPRA',
+      fecha,
+      cantidad: String(cantidad),
+      precioUnitario: String(precio),
+      moneda: m?.moneda === 'ARS' ? 'ARS' : 'USD',
+      // El export no trae el dolar del dia. Sin el, una operacion en pesos no se
+      // puede medir en dolares: se guarda igual y la UI pide completarlo.
+      tipoCambioDia: null,
+      comision: String(num(m?.comision)),
+      origen,
+      refExterna: `${origen}:${huella}`,
+    })
+      .onConflictDoNothing({ target: transacciones.refExterna })
+      .returning({ id: transacciones.id });
+
+    if (fila) nuevos++; else repetidos++;
+  }
+  return { nuevos, repetidos, descartados };
+}
 
 export type OrigenGasto = 'BOLETA' | 'FOTO' | 'TEXTO' | 'MANUAL';
 

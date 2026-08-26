@@ -3,16 +3,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, salaries, gastos } from '@/db/schema';
-import { clasificarDocumento, faltaProveedor } from '@/lib/extract';
-import { guardarStatement, guardarSalary, guardarPortfolio, guardarGasto } from '@/lib/guardar';
+import { clasificarDocumento, clasificarArchivoTexto, faltaProveedor, MAX_CARACTERES_TEXTO } from '@/lib/extract';
+import { guardarStatement, guardarSalary, guardarPortfolio, guardarGasto, guardarMovimientos } from '@/lib/guardar';
 import { guardarCierres, periodoSiguiente } from '@/lib/cierre';
 import { mensajeDeError } from '@/lib/errores';
 
-import type { ResultadoArchivo } from '@/lib/tipos';
+import { esArchivoTexto, esArchivoBinario, type ResultadoArchivo } from '@/lib/tipos';
 
 export const maxDuration = 300;
 
-const TIPOS_ACEPTADOS = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
 
 // El middleware exige el mismo Basic Auth que el dashboard (la ruta no empieza
 // con /api/sync), asi que aca no hace falta autenticar de nuevo.
@@ -34,8 +33,9 @@ export async function POST(req: NextRequest) {
   for (const file of files) {
     const nombre = file.name || 'archivo';
     try {
-      if (!TIPOS_ACEPTADOS.includes(file.type)) {
-        resultados.push({ nombre, estado: 'error', detalle: `Tipo no soportado (${file.type || 'desconocido'}). Se aceptan PDF, PNG, JPG y WEBP.` });
+      const archivoTexto = esArchivoTexto(file.name, file.type);
+      if (!archivoTexto && !esArchivoBinario(file.type)) {
+        resultados.push({ nombre, estado: 'error', detalle: `Tipo no soportado (${file.type || 'desconocido'}). Se aceptan PDF, PNG, JPG, WEBP, CSV y TXT.` });
         continue;
       }
 
@@ -51,6 +51,49 @@ export async function POST(req: NextRequest) {
       ]);
       if (yaSt.length || yaSal.length || yaGasto.length) {
         resultados.push({ nombre, estado: 'duplicado', detalle: 'Ya estaba cargado.' });
+        continue;
+      }
+
+      // --- Archivos de texto (CSV, TXT) ---------------------------------
+      if (archivoTexto) {
+        const contenido = buf.toString('utf8');
+        if (!contenido.trim()) {
+          resultados.push({ nombre, estado: 'error', detalle: 'El archivo esta vacio.' });
+          continue;
+        }
+        if (contenido.length > MAX_CARACTERES_TEXTO) {
+          resultados.push({
+            nombre, estado: 'error',
+            detalle: `El archivo tiene ${Math.round(contenido.length / 1000)}k caracteres y el maximo es ${MAX_CARACTERES_TEXTO / 1000}k. Partilo por año o por trimestre.`,
+          });
+          continue;
+        }
+
+        const { resultado, hallazgos } = await clasificarArchivoTexto(contenido);
+        const censurado = hallazgos.length ? ` · se censuro antes de enviar: ${hallazgos.join(', ')}` : '';
+
+        if (resultado.tipo === 'MOVIMIENTOS') {
+          const movs = resultado.datos?.movimientos ?? [];
+          if (!movs.length) {
+            resultados.push({ nombre, estado: 'desconocido', detalle: `Parece un export de operaciones pero no se pudo leer ninguna fila.${censurado}` });
+            continue;
+          }
+          const { nuevos, repetidos, descartados } = await guardarMovimientos(movs, 'IMPORTADO');
+          const partes = [`${nuevos} ${nuevos === 1 ? 'operacion nueva' : 'operaciones nuevas'}`];
+          if (repetidos) partes.push(`${repetidos} ya estaban`);
+          if (descartados) partes.push(`${descartados} sin datos suficientes`);
+          resultados.push({ nombre, estado: 'cargado', tipo: 'Operaciones', detalle: partes.join(' · ') + censurado });
+          continue;
+        }
+
+        if (resultado.tipo === 'GASTO') {
+          const { periodo, monto } = await guardarGasto(resultado.datos, 'TEXTO', fileId);
+          periodosTocados.add(periodo);
+          resultados.push({ nombre, estado: 'cargado', tipo: 'Gasto', detalle: `${resultado.datos.concepto} · ${periodo} · $ ${monto.toLocaleString('es-AR')}${censurado}` });
+          continue;
+        }
+
+        resultados.push({ nombre, estado: 'desconocido', detalle: (resultado.datos?.motivo ?? 'No se reconocio el contenido del archivo.') + censurado });
         continue;
       }
 

@@ -1,14 +1,18 @@
-import { STATEMENT_SYSTEM, SALARY_SYSTEM, PORTFOLIO_SYSTEM, CLASSIFY_SYSTEM, TEXTO_SYSTEM } from './prompts';
+import {
+  STATEMENT_SYSTEM, SALARY_SYSTEM, PORTFOLIO_SYSTEM, CLASSIFY_SYSTEM, TEXTO_SYSTEM,
+  CLASIFICAR_TEXTO_SYSTEM,
+} from './prompts';
 import { anthropicConfigurado, anthropicGenerar, anthropicSinCredito } from './anthropic';
 import { geminiConfigurado, geminiGenerar } from './gemini';
 import { redactar, redactarProfundo } from './pii';
 import type {
   Documento, StatementData, SalaryData, PortfolioData, DocumentoClasificado, TextoClasificado,
+  ArchivoTextoClasificado,
 } from './tipos';
 
 export type {
-  Documento, StatementData, SalaryData, PortfolioData, GastoData,
-  DocumentoClasificado, TextoClasificado,
+  Documento, StatementData, SalaryData, PortfolioData, GastoData, MovimientoData,
+  DocumentoClasificado, TextoClasificado, ArchivoTextoClasificado,
 } from './tipos';
 
 const SIN_PROVEEDOR =
@@ -59,6 +63,24 @@ export const extractPortfolio = async (images: Documento[]) =>
 // legajo de un recibo si nadie los saca.
 export const clasificarDocumento = async (doc: Documento) =>
   redactarProfundo(parseJson<DocumentoClasificado>(await generar(CLASSIFY_SYSTEM, [doc])));
+
+// Limite del contenido de un archivo de texto. Un export de años enteros puede
+// tener decenas de miles de filas: se cobra por token y ademas no entra en la
+// ventana de contexto. Mejor cortar con un mensaje claro que fallar a la mitad.
+export const MAX_CARACTERES_TEXTO = 120_000;
+
+/**
+ * Clasifica el contenido de un CSV o TXT. A diferencia de un PDF, acá la
+ * redaccion de datos personales SI protege: el texto se limpia antes de salir
+ * hacia el proveedor.
+ */
+export async function clasificarArchivoTexto(contenido: string) {
+  const { texto, hallazgos } = redactar(contenido);
+  const resultado = parseJson<ArchivoTextoClasificado>(
+    await generar(CLASIFICAR_TEXTO_SYSTEM, [], `Contenido del archivo:\n${texto}`),
+  );
+  return { resultado: redactarProfundo(resultado), hallazgos };
+}
 
 // Analisis narrativo sobre datos ya agregados y redactados. El JSON que entra
 // lo arma lib/analisis.ts; aca solo se despacha al proveedor disponible.

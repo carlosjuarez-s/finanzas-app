@@ -50,7 +50,8 @@ export default function UploadPanel() {
       <h2>Subir documentos</h2>
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Text type="secondary" className="resultado">
-          Resumenes, recibos de sueldo o capturas del portfolio. Se detecta solo que es cada uno.
+          Resúmenes, recibos, boletas de servicios, fotos de comprobantes, o el CSV de
+          operaciones que exporta tu broker. Se detecta solo qué es cada uno.
         </Text>
 
         <Upload
@@ -60,7 +61,7 @@ export default function UploadPanel() {
           beforeUpload={() => false}
           fileList={archivos}
           onChange={({ fileList }) => setArchivos(fileList)}
-          accept=".pdf,.png,.jpg,.jpeg,.webp"
+          accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt,.tsv"
         >
           <Button>Elegir archivos</Button>
         </Upload>

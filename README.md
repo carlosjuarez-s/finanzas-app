@@ -16,6 +16,17 @@ Subida manual ───────▶ /api/upload ────┤   (clasifica 
 Dashboard (/) ◀── Postgres (server component)
 ```
 
+**Qué se puede subir.** PDF, PNG, JPG y WEBP van al modelo como documento —
+tiene que *verlos*. **CSV, TXT y TSV** se leen como texto, y eso cambia algo
+importante: **se censuran los datos personales antes de enviarlos**, cosa que en
+un PDF no es posible. Un CSV suele ser el export de operaciones del broker, así
+que ese camino también importa el historial sin necesitar la API.
+
+El mimetype de un `.csv` es un desastre entre navegadores (Excel lo registra como
+`application/vnd.ms-excel`, otros mandan `octet-stream`, otros nada), así que la
+detección mira también la extensión. Hay tests: un export válido rechazado sin
+motivo es de lo más frustrante que puede pasar.
+
 **Identidad de un documento.** La columna `fileId` es el origen: el id del archivo
 en Drive, o `upload:<sha256>` para los subidos a mano. El `unique` de esa columna
 es lo que evita procesar (y pagar) dos veces el mismo PDF, venga de donde venga.

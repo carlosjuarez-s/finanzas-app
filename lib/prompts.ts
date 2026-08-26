@@ -123,6 +123,50 @@ ${GASTO_SPEC}
 ## tipo = PORTFOLIO
 ${PORTFOLIO_SPEC}`;
 
+// Esquema de un export de movimientos: el historial de operaciones que Binance,
+// IOL o cualquier broker deja bajar como CSV.
+export const MOVIMIENTOS_SPEC = `{
+  "movimientos": [{
+    "activo": string,                 // ticker: BTC, AAPL, AL30
+    "clase": "CRIPTO" | "CEDEAR" | "RENTA_FIJA" | "FCI" | "DOLAR",
+    "tipo": "COMPRA" | "VENTA",
+    "fecha": "YYYY-MM-DD",
+    "cantidad": number,
+    "precioUnitario": number,         // por unidad, no el total de la operacion
+    "moneda": "ARS" | "USD",
+    "comision": number                // 0 si no figura
+  }]
+}
+
+Reglas:
+- Si una fila trae el TOTAL y la cantidad, el precio unitario es total dividido cantidad. No copies el total como si fuera el precio unitario.
+- En Binance un par como BTCUSDT significa activo BTC y moneda USD (USDT se trata como dolar).
+- Los encabezados varian entre brokers: "Date"/"Fecha", "Side"/"Tipo"/"Operacion", "Price"/"Precio", "Amount"/"Cantidad"/"Nominales". Interpretalos por lo que contienen, no por el nombre exacto.
+- Ignora filas que no sean compras ni ventas: depositos, retiros, transferencias internas, saldos.
+- Si una fila esta incompleta o no se entiende, omitila en vez de inventar el dato faltante.`;
+
+// Clasificador para archivos de TEXTO (CSV, TXT). A diferencia de un PDF, acá el
+// contenido se puede leer y censurar antes de mandarlo, asi que la redaccion de
+// datos personales protege de verdad.
+export const CLASIFICAR_TEXTO_SYSTEM = `Sos un clasificador de archivos financieros en texto plano (CSV, TXT, exports de brokers). Devolves SOLO JSON valido, sin markdown:
+
+{ "tipo": "MOVIMIENTOS" | "GASTO" | "DESCONOCIDO", "datos": { ... } }
+
+Identifica el tipo:
+- MOVIMIENTOS: un listado de operaciones de compra y venta de activos. Es el caso tipico de un export de Binance, IOL o un broker.
+- GASTO: el archivo describe UN gasto puntual (una nota, un comprobante en texto).
+- DESCONOCIDO: cualquier otra cosa, o un contenido que no se entiende con confianza.
+
+Los datos pueden venir censurados: donde diga [CUIT], [DNI], [EMAIL] o [SECRETO] es una redaccion intencional, no un error del archivo. Segui adelante sin mencionarlo.
+
+Si tipo es DESCONOCIDO, "datos" es { "motivo": "<que es el archivo o por que no se pudo leer>" }.
+
+## tipo = MOVIMIENTOS
+${MOVIMIENTOS_SPEC}
+
+## tipo = GASTO
+${GASTO_SPEC}`;
+
 // Analisis de la situacion financiera.
 //
 // El modelo NO calcula: recibe hallazgos que ya se computaron en codigo

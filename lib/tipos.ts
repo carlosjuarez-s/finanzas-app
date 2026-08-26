@@ -46,7 +46,44 @@ export type TextoClasificado =
   | { tipo: 'GASTO'; datos: GastoData }
   | { tipo: 'DESCONOCIDO'; datos: { motivo?: string } };
 
+// Un movimiento de un export de broker: la fila cruda ya interpretada.
+export type MovimientoData = {
+  activo: string;
+  clase: string;
+  tipo: 'COMPRA' | 'VENTA';
+  fecha: string;
+  cantidad: number;
+  precioUnitario: number;
+  moneda: 'ARS' | 'USD';
+  comision: number;
+};
+
+// Resultado de subir un CSV o un TXT. A diferencia de un PDF, el contenido se
+// puede censurar antes de mandarlo al modelo.
+export type ArchivoTextoClasificado =
+  | { tipo: 'MOVIMIENTOS'; datos: { movimientos: MovimientoData[] } }
+  | { tipo: 'GASTO'; datos: GastoData }
+  | { tipo: 'DESCONOCIDO'; datos: { motivo?: string } };
+
 export type PortfolioData = {
   plataforma: string; totalUsd: number | null; totalArs: number | null;
   positions: { activo: string; clase: string; cantidad: number; valorUsd: number | null; valorArs: number | null }[];
 };
+
+// Deteccion del tipo de archivo subido.
+//
+// Los binarios los tiene que VER el modelo; los de texto se pueden leer y
+// censurar antes de mandarlos. Por eso van por caminos distintos.
+export const TIPOS_BINARIOS = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+
+// El mimetype de un .csv es un desastre entre navegadores y sistemas: Excel lo
+// registra como application/vnd.ms-excel, algunos mandan octet-stream y otros
+// no mandan nada. Decidir solo por mimetype rechaza exports validos sin motivo,
+// asi que la extension tambien cuenta.
+const TIPOS_TEXTO = ['text/csv', 'text/plain', 'text/tab-separated-values', 'application/csv', 'application/vnd.ms-excel'];
+
+export const esArchivoTexto = (nombre: string, mimeType: string): boolean =>
+  TIPOS_TEXTO.includes(mimeType) || /\.(csv|txt|tsv)$/i.test(nombre ?? '');
+
+export const esArchivoBinario = (mimeType: string): boolean =>
+  TIPOS_BINARIOS.includes(mimeType);
