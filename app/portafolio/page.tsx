@@ -8,11 +8,13 @@ import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import AltaTransaccion from './alta-transaccion';
+import Operaciones, { type Operacion } from './operaciones';
+import BarChart from '../bar-chart';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Portafolio() {
-  let resultados, errores, tenencias, hayTx = false;
+  let resultados, errores, tenencias, ops: Operacion[] = [];
   let sinPrecio: string[] = [];
   try {
     // Ultimo snapshot de cada plataforma: es lo que el broker dice que tenes.
@@ -39,7 +41,12 @@ export default async function Portafolio() {
     sinPrecio = enVivo.sinPrecio;
 
     ({ resultados, errores } = await resultadosPorActivo(precios));
-    hayTx = (await db.select({ id: transacciones.id }).from(transacciones).limit(1)).length > 0;
+    ops = (await db.select().from(transacciones).orderBy(desc(transacciones.fecha))).map(t => ({
+      id: t.id, activo: t.activo, tipo: t.tipo, fecha: t.fecha,
+      cantidad: Number(t.cantidad), precioUnitario: Number(t.precioUnitario),
+      moneda: t.moneda, tipoCambioDia: t.tipoCambioDia === null ? null : Number(t.tipoCambioDia),
+      comision: Number(t.comision), origen: t.origen,
+    }));
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;
@@ -60,6 +67,22 @@ export default async function Portafolio() {
   const invertidoUsd = resultados.reduce((s, r) => s + r.costoTotalUsd, 0);
   const noRealizado = resultados.reduce((s, r) => s + (r.noRealizadoUsd ?? 0), 0);
   const realizado = resultados.reduce((s, r) => s + r.realizadoUsd, 0);
+
+  const composicion = [...consolidado.entries()]
+    .filter(([, v]) => v.valorUsd !== null && v.valorUsd > 0)
+    .sort((a, b) => (b[1].valorUsd ?? 0) - (a[1].valorUsd ?? 0))
+    .map(([activo, v]) => ({ etiqueta: activo, valor: v.valorUsd as number }));
+
+  // Solo los que tienen costo cargado: sin precio de entrada no hay resultado
+  // que mostrar, y una barra en cero se leeria como "no gane nada".
+  const resultadoPorActivo = resultados
+    .filter(r => r.noRealizadoUsd !== null && r.costoTotalUsd > 0)
+    .sort((a, b) => (b.noRealizadoUsd ?? 0) - (a.noRealizadoUsd ?? 0))
+    .map(r => ({
+      etiqueta: r.activo,
+      valor: r.noRealizadoUsd as number,
+      nota: `Costo ${fmtUsd(r.costoTotalUsd)} · hoy ${fmtUsd(r.valorActualUsd ?? 0)}`,
+    }));
 
   const avisos = discrepancias(
     resultados,
@@ -110,6 +133,28 @@ export default async function Portafolio() {
           Sin cotización para {sinPrecio.join(', ')}. Se muestra «—» en vez de un cero:
           no saber cuánto vale algo y que valga cero son cosas distintas.
         </p>
+      )}
+
+      {composicion.length > 1 && (
+        <section>
+          <h2>Composición</h2>
+          <BarChart datos={composicion} formato="usd" />
+          <p className="nota">
+            Cuánto pesa cada activo en el total. Es lo que muestra si estás más concentrado
+            de lo que creías.
+          </p>
+        </section>
+      )}
+
+      {resultadoPorActivo.length > 0 && (
+        <section>
+          <h2>Ganancia y pérdida por activo</h2>
+          <BarChart datos={resultadoPorActivo} formato="usd" divergente />
+          <p className="nota">
+            En dólares, contra lo que pagaste. Las barras crecen desde el cero del medio:
+            a la derecha ganancia, a la izquierda pérdida.
+          </p>
+        </section>
       )}
 
       <section>
@@ -175,9 +220,11 @@ export default async function Portafolio() {
         </section>
       )}
 
+      <Operaciones operaciones={ops} />
+
       <AltaTransaccion />
 
-      {!hayTx && (
+      {!ops.length && (
         <p className="nota">
           Sin operaciones cargadas solo se ve cuánto tenés, no cuánto ganaste: una foto del
           portafolio no dice a qué precio compraste. Anotá las compras y aparece el resultado.

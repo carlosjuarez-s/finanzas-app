@@ -70,6 +70,53 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * Corregir una operacion: el precio de entrada, la cantidad, la fecha, o
+ * completar el tipo de cambio que el export del broker no trae.
+ */
+export async function PATCH(req: NextRequest) {
+  const b = await req.json().catch(() => null);
+  if (!b?.id) return NextResponse.json({ error: 'Falta el id.' }, { status: 400 });
+
+  const cantidad = numero(b.cantidad);
+  const precio = numero(b.precioUnitario);
+  const moneda = b.moneda === 'ARS' ? 'ARS' : 'USD';
+  const tc = numero(b.tipoCambioDia, 0.0001);
+
+  if (!cantidad || cantidad <= 0) return NextResponse.json({ error: 'La cantidad tiene que ser mayor a cero.' }, { status: 400 });
+  if (precio === null) return NextResponse.json({ error: 'El precio no puede ser negativo.' }, { status: 400 });
+  if (!FECHA.test(String(b.fecha))) return NextResponse.json({ error: 'La fecha tiene que ser YYYY-MM-DD.' }, { status: 400 });
+  if (moneda === 'ARS' && !tc) {
+    return NextResponse.json(
+      { error: 'Una operacion en pesos necesita el tipo de cambio de ese dia para medir la ganancia en dolares.' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const [fila] = await db.update(transacciones)
+      .set({
+        cantidad: String(cantidad),
+        precioUnitario: String(precio),
+        fecha: b.fecha,
+        moneda,
+        tipoCambioDia: moneda === 'ARS' ? String(tc) : null,
+        comision: String(numero(b.comision) ?? 0),
+        // Corregida a mano deja de ser la fila importada: si se reimporta el
+        // mismo CSV, la huella ya no coincide y no pisa esta correccion.
+        origen: 'MANUAL',
+        refExterna: null,
+      })
+      .where(eq(transacciones.id, String(b.id)))
+      .returning({ id: transacciones.id });
+
+    if (!fila) return NextResponse.json({ error: 'No se encontro esa operacion.' }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: mensajeDeError(e) }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   const url = new URL(req.url);
   const id = url.searchParams.get('id');

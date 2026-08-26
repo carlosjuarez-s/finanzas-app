@@ -4,6 +4,7 @@ import { monthlyCloses } from '@/db/schema';
 import { fmtArs, fmtPct, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import LineChart from '../line-chart';
+import BarChart from '../bar-chart';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 
@@ -50,7 +51,6 @@ export default async function Historico() {
     }
   }
   const cats = [...acumCategorias.entries()].sort((a, b) => b[1] - a[1]);
-  const maxCat = cats[0]?.[1] ?? 1;
 
   return (
     <main>
@@ -97,15 +97,25 @@ export default async function Historico() {
 
       <section>
         <h2>En qué se fue la plata (todos los meses)</h2>
-        {cats.map(([cat, monto]) => (
-          <div key={cat} style={{ padding: '8px 0' }}>
-            <div className="fila" style={{ border: 'none', padding: 0 }}>
-              <span>{cat}</span>
-              <span className="monto ars">{fmtArs(monto)}</span>
-            </div>
-            <div className="barra" style={{ width: `${(monto / maxCat) * 100}%` }} />
-          </div>
-        ))}
+        <BarChart
+          datos={cats.map(([cat, monto]) => ({ etiqueta: cat, valor: monto }))}
+          formato="ars"
+        />
+      </section>
+
+      <section>
+        <h2>Tasa de ahorro mes a mes</h2>
+        <BarChart
+          datos={cierres.filter(c => c.tasaAhorro !== null).map(c => ({
+            etiqueta: fmtPeriodo(c.periodo), valor: Number(c.tasaAhorro),
+          }))}
+          formato="pct"
+          divergente
+        />
+        <p className="nota">
+          Una tasa negativa es un mes en que gastaste más de lo que entró. Puede ser real,
+          o puede ser que falte cargar el recibo de ese mes.
+        </p>
       </section>
 
       <section>

@@ -112,6 +112,30 @@ section > h2 {
 .tabla-gemela th:first-child, .tabla-gemela td:first-child { text-align: left; }
 .tabla-gemela th { font-family: var(--font-data); font-size: 11px; color: var(--tinta-suave); font-weight: 400; }
 
+/* Barras horizontales. Marcas finas y grilla ausente: la barra ya es la escala. */
+.barras { display: flex; flex-direction: column; gap: 8px; }
+.barra-fila {
+  display: grid;
+  grid-template-columns: minmax(80px, 8rem) 1fr minmax(70px, auto);
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.barra-etiqueta { overflow-wrap: anywhere; min-width: 0; }
+.barra-pista { position: relative; height: 14px; display: block; }
+.barra-marca {
+  display: block; height: 10px; margin-top: 2px;
+  /* Extremo redondeado del lado del dato, cuadrado en la base. */
+  border-radius: 0 2px 2px 0;
+  transition: opacity 0.15s ease;
+}
+/* El cero de un grafico divergente: una hairline, no una barra mas. */
+.barra-cero {
+  position: absolute; left: 50%; top: 0; bottom: 0;
+  width: 1px; background: var(--linea);
+}
+.barra-valor { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+
 /* Navegacion entre secciones */
 .nav { display: flex; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--linea); padding-bottom: 10px; margin-bottom: 18px; }
 .nav a {

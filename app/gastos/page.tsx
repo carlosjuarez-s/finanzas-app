@@ -6,6 +6,7 @@ import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import GastoTexto from '../gasto-texto';
+import BarChart from '../bar-chart';
 import Editor, { type Item } from './editor';
 
 export const dynamic = 'force-dynamic';
@@ -70,6 +71,16 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
     monto: Number(c.montoArs), origen: st.card, corregido: c.corregido,
   }))).sort((a, b) => b.monto - a.monto);
 
+  // Categorias del mes, juntando tarjeta y gastos sueltos: es la vista que
+  // responde "en que se me va la plata", no de donde salio cada peso.
+  const acum = new Map<string, number>();
+  for (const i of [...itemsGastos, ...itemsConsumos]) {
+    if (i.categoria) acum.set(i.categoria, (acum.get(i.categoria) ?? 0) + i.monto);
+  }
+  const porCategoria = [...acum.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([etiqueta, valor]) => ({ etiqueta, valor }));
+
   return (
     <main>
       <Nav />
@@ -79,6 +90,13 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
         Todo esto lo interpretó un modelo a partir de tus documentos. Si algo quedó mal,
         corregilo acá: el cierre del mes se recalcula solo.
       </p>
+
+      {porCategoria.length > 1 && (
+        <section>
+          <h2>Gasto del mes por categoría</h2>
+          <BarChart datos={porCategoria} formato="ars" />
+        </section>
+      )}
 
       <GastoTexto />
 
