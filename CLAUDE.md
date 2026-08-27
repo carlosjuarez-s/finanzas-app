@@ -99,6 +99,12 @@ se negocian:
 - **Nunca en un log o en `ultimo_error` sin censurar.** Un error de Binance trae
   la API key en el texto: pasarlo por `errorCensurado()` primero.
 
+**IOL esta en pausa por decision del usuario** (agosto 2026): no implementar la
+integracion hasta que la pida explicitamente. El motivo es el de arriba —su API
+pide las credenciales con las que se opera la cuenta— y mientras tanto IOL entra
+por CSV, que no obliga a guardar nada. Binance queda como la unica plataforma
+conectada por API.
+
 Y al mostrar una conexión, decir la verdad sobre qué la protege:
 `lecturaGarantizadaPorLaPlataforma` distingue una credencial que **no puede**
 operar aunque se filtre (Binance con key de solo lectura) de una que puede hacer
