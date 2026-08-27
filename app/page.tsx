@@ -1,11 +1,23 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, portfolioSnapshots } from '@/db/schema';
-import { calcularCierre } from '@/lib/cierre';
+import { statements, portfolioSnapshots, gastos as tablaGastos } from '@/db/schema';
+import { calcularCierre, cargarPrestamos } from '@/lib/cierre';
+import { totalDelMes } from '@/lib/prestamos';
+import { preciosDePortafolio } from '@/lib/precios';
+import { clasesDeActivos, ratiosVigentes } from '@/lib/sync-portafolio';
 import { fmtArs, fmtUsd } from '@/lib/formato';
 import Nav from './nav';
 import SyncButton from './sync-button';
 import UploadPanel from './upload-panel';
+import BarChart from './bar-chart';
+import StackedBar from './stacked-bar';
+
+// Paleta validada para tres categorias sobre el papel de la app (contraste,
+// separacion bajo daltonismo y piso de croma). No agregar un cuarto color sin
+// volver a validarla: un hue inventado se confunde con alguno de estos.
+const COLOR_TARJETA = '#B4690E';
+const COLOR_OTROS = '#2D5FA8';
+const COLOR_AHORRO = '#1E7A4F';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +50,40 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     await calcularCierre(periodo);
 
   const cats = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
-  const maxCat = cats[0]?.[1] ?? 1;
+
+  // Las tres partes en que se divide el sueldo. Se agrupa en tres a proposito:
+  // es lo que la paleta tiene validado y lo que una barra de este alto puede
+  // mostrar sin que los segmentos chicos desaparezcan.
+  const tarjetasArs = sts.reduce((s, st) => s + Number(st.totalArs), 0);
+  const [sueltosDelMes, prestamosCargados] = await Promise.all([
+    db.select().from(tablaGastos).where(eq(tablaGastos.periodo, periodo)),
+    cargarPrestamos(),
+  ]);
+  const otrosArs = sueltosDelMes.reduce((s, g) => s + Number(g.montoArs), 0)
+    + totalDelMes(prestamosCargados, periodo);
+
+  // Cotizaciones en vivo, pero SOLO para el mes en curso. Un mes cerrado es un
+  // registro de lo que valia entonces: repreciarlo con el valor de hoy borraria
+  // justamente lo que el historico tiene que conservar.
+  const esMesActual = periodo === new Date().toISOString().slice(0, 7);
+  let preciosHoy: Record<string, number> = {};
+  if (esMesActual && snapshots.length) {
+    const [clases, ratios] = await Promise.all([clasesDeActivos(), ratiosVigentes()]);
+    preciosHoy = (await preciosDePortafolio(clases, ratios)).precios;
+  }
+
+  /** Valor de una posicion: el de hoy si se consiguio, si no el del snapshot. */
+  const valorDe = (activo: string, cantidad: number, guardado: number | null) => {
+    const hoy = preciosHoy[activo];
+    if (hoy != null && Number.isFinite(hoy)) return { usd: hoy * cantidad, envivo: true };
+    return { usd: guardado, envivo: false };
+  };
+
+  const reparto = [
+    { etiqueta: 'Tarjetas', valor: tarjetasArs, color: COLOR_TARJETA },
+    { etiqueta: 'Servicios, alquiler y cuotas', valor: otrosArs, color: COLOR_OTROS },
+    { etiqueta: 'Ahorro', valor: Math.max(0, ahorro), color: COLOR_AHORRO },
+  ];
 
   const subs = sts.flatMap(st => st.consumos).filter(c => c.categoria === 'Suscripciones');
   const usdSubs = subs.reduce((s, c) => s + Number(c.montoUsd), 0);
@@ -67,17 +112,28 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
+      {neto > 0 && (
+        <section>
+          <h2>A dónde fue el sueldo</h2>
+          <StackedBar partes={reparto} total={neto} formato="ars" />
+          {ahorro < 0 && (
+            <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
+              Este mes gastaste {fmtArs(-ahorro)} más de lo que entró, así que no hay
+              ahorro que repartir: la barra muestra en qué se fue el sueldo, no cómo
+              se dividió. Puede ser real, o puede que falte cargar algún ingreso.
+            </p>
+          )}
+        </section>
+      )}
+
       <section>
-        <h2>Gastos por categoria</h2>
-        {cats.map(([cat, monto]) => (
-          <div key={cat} style={{ padding: '8px 0' }}>
-            <div className="fila" style={{ border: 'none', padding: 0 }}>
-              <span>{cat}</span>
-              <span className="monto ars">{fmtArs(monto)}</span>
-            </div>
-            <div className="barra" style={{ width: `${(monto / maxCat) * 100}%` }} />
-          </div>
-        ))}
+        <h2>Gastos por categoría</h2>
+        {/* Barras y no torta: acá la pregunta es cual categoria es mas grande
+            que cual, y comparar largos es lo que el ojo hace bien. */}
+        <BarChart
+          datos={cats.map(([cat, monto]) => ({ etiqueta: cat, valor: monto }))}
+          formato="ars"
+        />
       </section>
 
       {subs.length > 0 && (
@@ -108,17 +164,45 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       {snapshots.length > 0 && (
         <section>
           <h2>Inversiones</h2>
-          {snapshots.map(s => (
-            <div key={s.id} style={{ marginBottom: 16 }}>
-              <div className="fila"><strong>{s.plataforma}</strong><span className="monto usd">{s.totalUsd ? fmtUsd(Number(s.totalUsd)) : '—'}</span></div>
-              {s.positions.map(p => (
-                <div className="fila" key={p.id} style={{ paddingLeft: 12 }}>
-                  <span>{p.activo} <span className="chip">{p.clase}</span></span>
-                  <span className="monto">{p.valorUsd ? fmtUsd(Number(p.valorUsd)) : Number(p.cantidad)}</span>
+          {snapshots.map(s => {
+            const valores = s.positions.map(p => ({
+              p, ...valorDe(p.activo, Number(p.cantidad), p.valorUsd === null ? null : Number(p.valorUsd)),
+            }));
+            // El total se recompone de las posiciones: si alguna se repreció,
+            // el total guardado en el snapshot ya no cuadra con las filas.
+            const conValor = valores.filter(v => v.usd !== null);
+            const total = conValor.length === valores.length
+              ? conValor.reduce((acc, v) => acc + (v.usd as number), 0)
+              : null;
+
+            return (
+              <div key={s.id} style={{ marginBottom: 16 }}>
+                <div className="fila">
+                  <strong>{s.plataforma}</strong>
+                  <span className="monto usd">{total !== null ? fmtUsd(total) : '—'}</span>
                 </div>
-              ))}
-            </div>
-          ))}
+                {valores.map(({ p, usd, envivo }) => (
+                  <div className="fila" key={p.id} style={{ paddingLeft: 12 }}>
+                    <span>
+                      {p.activo} <span className="chip">{p.clase}</span>
+                      {envivo && <span className="chip">hoy</span>}
+                    </span>
+                    <span className="monto">
+                      {usd !== null ? fmtUsd(usd) : Number(p.cantidad).toLocaleString('es-AR')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <p className="nota">
+            {esMesActual
+              ? 'Las posiciones marcadas «hoy» están a cotización de este momento. Las que no, ' +
+                'quedaron con el valor de la última sincronización: no se consiguió precio y ' +
+                'preferimos el dato viejo antes que inventar uno.'
+              : 'Mes cerrado: los valores son los de la última sincronización de ese mes, no los de hoy. ' +
+                'Repreciar el pasado borraría lo que el histórico tiene que conservar.'}
+          </p>
         </section>
       )}
     </main>

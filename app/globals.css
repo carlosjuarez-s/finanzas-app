@@ -247,3 +247,58 @@ section > h2 {
   height: 100%;
   background: var(--peso);
 }
+
+/* Barra apilada: parte-de-un-todo sin recurrir a una torta.
+   Los segmentos se separan con un hueco del color del papel, no con un borde:
+   un borde agrega una linea que compite con el dato. */
+.apilada {
+  display: flex;
+  height: 30px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--linea);
+  gap: 2px;
+}
+.apilada-parte {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2px;
+  transition: opacity .12s;
+}
+.apilada-adentro {
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-weight: 600;
+  /* Sobre un relleno oscuro el texto va en claro: es la unica vez que un texto
+     toma color del dato, porque adentro del relleno no hay alternativa. */
+  color: #FFFDF7;
+  letter-spacing: .02em;
+}
+
+/* Clase propia y no `.leyenda`: esa ya es del grafico de lineas, donde la marca
+   es una linea de 12x2. Reusarla le cambiaba la marca a un cuadrado. */
+.leyenda-apilada {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.leyenda-apilada li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  transition: opacity .12s;
+}
+.leyenda-apilada .marca {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+/* Los montos en columna, alineados a la derecha: es un libro mayor, se leen
+   comparando de arriba abajo. */
+.leyenda-apilada .monto { text-align: right; }

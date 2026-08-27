@@ -40,6 +40,31 @@ Todo lo que devuelve el modelo pasa por las funciones de `lib/guardar.ts`:
 conversión de números tolerante al formato argentino, defaults en los textos,
 fechas inválidas a `null` y períodos validados contra `YYYY-MM`.
 
+## Graficos
+
+La forma sale del trabajo que tiene que hacer el lector, y el color va al final.
+
+- **Comparar cual es mas grande** (categorias de gasto, resultado por activo):
+  barras. Horizontales, porque las etiquetas son nombres largos.
+- **Parte-de-un-todo** (a donde fue el sueldo): barra **apilada**, no torta. Una
+  torta obliga a comparar angulos, que el ojo hace mal; dos porciones parecidas
+  son indistinguibles y hay que ir a leer los numeros igual.
+- **Evolucion**: lineas.
+
+La paleta categorica esta **validada**, no elegida a ojo: `#B4690E`, `#2D5FA8`,
+`#1E7A4F` en ese orden pasan contraste sobre el papel, separacion bajo
+daltonismo y piso de croma. Tres es el tope — un cuarto hue inventado se
+confunde con alguno de estos bajo CVD. Si hacen falta mas partes, se agrupan
+antes de llegar al grafico.
+
+Todo grafico lleva su tabla gemela en un `<details>`: ningun valor puede quedar
+solo detras del hover. Y las etiquetas y montos van en tinta, nunca en el color
+de la serie; el color lo lleva la marca al lado. La unica excepcion es el texto
+*adentro* de un relleno, que no tiene alternativa.
+
+Ojo con `.leyenda`: es del grafico de lineas, con marca de 12x2. La barra
+apilada usa `.leyenda-apilada` justamente para no pisarla.
+
 ## Prestamos
 
 Un prestamo no es un gasto: es un compromiso con cronograma. Se guarda **el plan**
