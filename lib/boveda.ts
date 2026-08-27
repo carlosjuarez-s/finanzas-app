@@ -63,15 +63,26 @@ export function versionActual(): number {
   return v;
 }
 
-// Para que la UI pueda avisar antes de que la persona cargue una credencial,
-// en vez de fallar despues de escribirla.
-export function bovedaConfigurada(): boolean {
+/**
+ * Para que la UI pueda avisar antes de que la persona cargue una credencial,
+ * en vez de fallar despues de escribirla.
+ *
+ * Devuelve el motivo y no solo un booleano: "falta la variable" y "la clave
+ * tiene el largo equivocado" se arreglan distinto, y un cartel que dice
+ * "falta" cuando en realidad esta mal pegada manda a buscar el problema al
+ * lugar equivocado.
+ */
+export function estadoBoveda(): { ok: true } | { ok: false; motivo: string } {
   try {
     leerClave(versionActual());
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, motivo: e instanceof ErrorBoveda ? e.message : String(e) };
   }
+}
+
+export function bovedaConfigurada(): boolean {
+  return estadoBoveda().ok;
 }
 
 export function cifrar(valor: unknown, contexto: string): Cifrado {

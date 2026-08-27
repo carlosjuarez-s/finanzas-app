@@ -8,7 +8,11 @@ import type { ConexionVisible } from '@/lib/conexiones';
 
 const { Text } = Typography;
 
-export default function Panel({ conexiones, bovedaLista }: { conexiones: ConexionVisible[]; bovedaLista: boolean }) {
+export default function Panel({ conexiones, bovedaLista, motivoBoveda }: {
+  conexiones: ConexionVisible[];
+  bovedaLista: boolean;
+  motivoBoveda?: string;
+}) {
   const [plataforma, setPlataforma] = useState<PlataformaId>('BINANCE');
   const [etiqueta, setEtiqueta] = useState('');
   const [credencial, setCredencial] = useState<Record<string, string>>({});
@@ -18,6 +22,15 @@ export default function Panel({ conexiones, bovedaLista }: { conexiones: Conexio
   const router = useRouter();
 
   const def = PLATAFORMAS[plataforma];
+
+  // Un boton gris sin explicacion al lado es un callejon sin salida: la
+  // persona completa los campos, no pasa nada, y no tiene como saber por que.
+  const faltan = def.campos.filter(c => !credencial[c.nombre]?.trim());
+  const bloqueo = !bovedaLista
+    ? 'Falta configurar la bóveda (mirá el aviso de arriba): sin esa clave la credencial no se puede cifrar, así que no se guarda.'
+    : faltan.length
+      ? `Completá ${faltan.map(c => c.etiqueta).join(' y ')} para poder conectar.`
+      : null;
 
   async function pedir(url: string, init: RequestInit) {
     setOcupado(true);
@@ -60,6 +73,7 @@ export default function Panel({ conexiones, bovedaLista }: { conexiones: Conexio
           message="Falta la clave de la bóveda"
           description={
             <span className="resultado">
+              {motivoBoveda && <><strong>{motivoBoveda}</strong><br /></>}
               Sin <code className="monto">BOVEDA_CLAVE_1</code> en Vercel no se pueden guardar
               credenciales cifradas. Generala con{' '}
               <code className="monto">node -e &quot;console.log(require(&apos;crypto&apos;).randomBytes(32).toString(&apos;base64&apos;))&quot;</code>{' '}
@@ -121,10 +135,11 @@ export default function Panel({ conexiones, bovedaLista }: { conexiones: Conexio
               type="primary"
               onClick={conectar}
               loading={ocupado}
-              disabled={!bovedaLista || def.campos.some(c => !credencial[c.nombre]?.trim())}
+              disabled={bloqueo !== null}
             >
               Conectar
             </Button>
+            {bloqueo && <Text type="secondary" className="resultado">{bloqueo}</Text>}
             {error && <Text type="danger" className="resultado">{error}</Text>}
           </Space>
         </Space>

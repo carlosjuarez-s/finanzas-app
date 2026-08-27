@@ -1,7 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { cifrar, descifrar, recifrar, pista, igualSeguro, bovedaConfigurada, ErrorBoveda } from './boveda';
+import { cifrar, descifrar, recifrar, pista, igualSeguro, bovedaConfigurada, estadoBoveda, ErrorBoveda } from './boveda';
 import { censurarSecretos, errorCensurado } from './secretos';
 
 const CLAVE_1 = randomBytes(32).toString('base64');
@@ -156,4 +156,23 @@ test('censura primero los secretos mas largos', () => {
   const largo = 'abcdefghIJKLMNOP';
   const salida = censurarSecretos(`clave=${largo}`, [corto, largo]);
   assert.doesNotMatch(salida, /IJKLMNOP/);
+});
+
+test('el estado distingue la clave que falta de la que esta mal pegada', () => {
+  // La UI muestra este motivo al lado del boton deshabilitado: si las dos
+  // situaciones dijeran lo mismo, mandaria a buscar el problema al lugar
+  // equivocado.
+  delete process.env.BOVEDA_CLAVE_1;
+  const falta = estadoBoveda();
+  assert.equal(falta.ok, false);
+  assert.match(falta.ok === false ? falta.motivo : '', /Falta la variable BOVEDA_CLAVE_1/);
+
+  process.env.BOVEDA_CLAVE_1 = Buffer.from('corta').toString('base64');
+  const corta = estadoBoveda();
+  assert.equal(corta.ok, false);
+  assert.match(corta.ok === false ? corta.motivo : '', /AES-256 necesita 32/);
+
+  process.env.BOVEDA_CLAVE_1 = randomBytes(32).toString('base64');
+  assert.deepEqual(estadoBoveda(), { ok: true });
+  assert.equal(bovedaConfigurada(), true);
 });

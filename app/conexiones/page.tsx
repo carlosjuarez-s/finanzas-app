@@ -1,5 +1,5 @@
 import { listarConexiones } from '@/lib/conexiones';
-import { bovedaConfigurada } from '@/lib/boveda';
+import { estadoBoveda } from '@/lib/boveda';
 import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
@@ -8,6 +8,7 @@ import Panel from './panel';
 export const dynamic = 'force-dynamic';
 
 export default async function Conexiones() {
+  const boveda = estadoBoveda();
   let conexiones;
   try {
     conexiones = await listarConexiones();
@@ -26,7 +27,11 @@ export default async function Conexiones() {
         Las credenciales se guardan cifradas y la clave que las abre vive fuera de la base
         de datos. Esta app nunca opera: solo lee tenencias.
       </p>
-      <Panel conexiones={conexiones} bovedaLista={bovedaConfigurada()} />
+      <Panel
+        conexiones={conexiones}
+        bovedaLista={boveda.ok}
+        motivoBoveda={boveda.ok ? undefined : boveda.motivo}
+      />
     </main>
   );
 }
