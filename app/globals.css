@@ -302,3 +302,23 @@ section > h2 {
 /* Los montos en columna, alineados a la derecha: es un libro mayor, se leen
    comparando de arriba abajo. */
 .leyenda-apilada .monto { text-align: right; }
+
+/* Dos salidas para el mismo monto. No es una lista decorativa: el orden importa
+   —evitarla vale mas que recuperarla— y por eso va numerada visualmente. */
+.salidas {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.salidas li {
+  font-size: 14px;
+  color: var(--tinta-suave);
+  padding-left: 14px;
+  border-left: 2px solid var(--linea);
+  max-width: 62ch;
+}
+.salidas li strong { color: var(--tinta); font-weight: 600; }
+.salidas li:first-child { border-left-color: var(--dolar); }

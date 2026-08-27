@@ -40,6 +40,28 @@ Todo lo que devuelve el modelo pasa por las funciones de `lib/guardar.ts`:
 conversión de números tolerante al formato argentino, defaults en los textos,
 fechas inválidas a `null` y períodos validados contra `YYYY-MM`.
 
+## Como se llaman los numeros
+
+Una etiqueta que no describe lo que el numero contiene manda a buscar la
+diferencia al lugar equivocado. La celda del cierre decia "Tarjetas" y traia los
+resumenes **mas** los gastos sueltos **mas** la cuota de los prestamos: dice
+"Gastos". Cuando cambie que entra en un total, revisar como se llama.
+
+## Percepciones RG 4815 / 5617
+
+La alicuota vive en `lib/impuestos.ts`, no adentro de un JSX: en Argentina esto
+cambia por resolucion y tiene que haber un solo lugar que tocar.
+
+Lo importante para quien lo lee no es cuanto le cobraron: es que hay **dos**
+salidas y no son equivalentes. Evitarla —cancelando el consumo en moneda
+extranjera con dolares propios, que es plata que nunca sale del bolsillo— y
+recuperarla ante ARCA, que vuelve mucho despues y en pesos que para entonces
+valen menos. La pantalla dice las dos, en ese orden.
+
+Lo percibido **es** lo que se habria ahorrado, asi que no hay funcion que lo
+"calcule": seria devolver el mismo numero. El monto se muestra una sola vez;
+repetirlo en dos filas se lee como un error de calculo.
+
 ## Graficos
 
 La forma sale del trabajo que tiene que hacer el lector, y el color va al final.

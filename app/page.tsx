@@ -6,6 +6,7 @@ import { totalDelMes } from '@/lib/prestamos';
 import { preciosDePortafolio } from '@/lib/precios';
 import { clasesDeActivos, ratiosVigentes } from '@/lib/sync-portafolio';
 import { fmtArs, fmtUsd } from '@/lib/formato';
+import { ALICUOTA_PERCEPCION, pesoSobreGasto } from '@/lib/impuestos';
 import Nav from './nav';
 import SyncButton from './sync-button';
 import UploadPanel from './upload-panel';
@@ -79,6 +80,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     return { usd: guardado, envivo: false };
   };
 
+  const pesoPercep = pesoSobreGasto(percep, gastoArs);
+
   const reparto = [
     { etiqueta: 'Tarjetas', valor: tarjetasArs, color: COLOR_TARJETA },
     { etiqueta: 'Servicios, alquiler y cuotas', valor: otrosArs, color: COLOR_OTROS },
@@ -104,7 +107,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <div className="ledger">
         <div className="celda"><p className="eyebrow">Ingreso neto</p><p className="valor ars">{fmtArs(neto)}</p></div>
         <div className="op">−</div>
-        <div className="celda"><p className="eyebrow">Tarjetas</p><p className="valor ars">{fmtArs(gastoArs)}</p><p className="monto usd" style={{ fontSize: 12 }}>{fmtUsd(gastoUsd)}</p></div>
+        {/* Gastos y no "Tarjetas": este numero incluye los resumenes, los gastos
+            sueltos (servicios, alquiler) y la cuota de los prestamos. Llamarlo
+            tarjetas mandaba a buscar la diferencia al resumen, donde no estaba. */}
+        <div className="celda"><p className="eyebrow">Gastos</p><p className="valor ars">{fmtArs(gastoArs)}</p><p className="monto usd" style={{ fontSize: 12 }}>{fmtUsd(gastoUsd)}</p></div>
         <div className="op">=</div>
         <div className="celda">
           <p className="eyebrow">Ahorro {tasa !== null && `(${tasa.toFixed(1)}%)`}</p>
@@ -156,10 +162,39 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       <UploadPanel />
 
-      <section>
-        <h2>Percepciones recuperables</h2>
-        <div className="fila"><span>RG 4815 / 5617 del mes (tramitar ante ARCA)</span><span className="monto ars">{fmtArs(percep)}</span></div>
-      </section>
+      {percep > 0 && (
+        <section>
+          <h2>
+            Percepciones del mes
+            {pesoPercep !== null && pesoPercep >= 0.1 && (
+              <span className="chip">{pesoPercep.toFixed(1)}% de tu gasto</span>
+            )}
+          </h2>
+
+          <div className="fila">
+            <span>
+              RG 4815 / 5617 sobre {fmtUsd(gastoUsd)} de consumo
+            </span>
+            <span className="monto ars">{fmtArs(percep)}</span>
+          </div>
+
+          {/* El mismo monto sirve para las dos cosas, asi que se muestra una
+              sola vez: repetirlo en dos filas se lee como un error de calculo.
+              Lo que cambia es que hacer con el. */}
+          <ul className="salidas">
+            <li>
+              <strong>Evitarla.</strong> Si cancelás el consumo en moneda extranjera con dólares
+              propios, la percepción del {(ALICUOTA_PERCEPCION * 100).toFixed(0)}% no se aplica.
+              Es plata que nunca sale del bolsillo.
+            </li>
+            <li>
+              <strong>Recuperarla.</strong> Lo ya percibido es pago a cuenta de Ganancias o Bienes
+              Personales y se tramita ante ARCA. Vuelve, pero mucho después y en pesos que para
+              entonces valen menos.
+            </li>
+          </ul>
+        </section>
+      )}
 
       {snapshots.length > 0 && (
         <section>
