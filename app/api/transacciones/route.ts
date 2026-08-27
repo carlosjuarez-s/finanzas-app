@@ -102,10 +102,13 @@ export async function PATCH(req: NextRequest) {
         moneda,
         tipoCambioDia: moneda === 'ARS' ? String(tc) : null,
         comision: String(numero(b.comision) ?? 0),
-        // Corregida a mano deja de ser la fila importada: si se reimporta el
-        // mismo CSV, la huella ya no coincide y no pisa esta correccion.
+        // Queda marcada como tocada a mano, pero conserva refExterna. Borrarla
+        // haria que al reimportar el mismo CSV o el historial de Binance la
+        // operacion entre de nuevo como si fuera otra, duplicando el activo.
+        // La correccion ya esta protegida por el onConflictDoNothing del
+        // importador: con la ref intacta, la reimportacion la reconoce y no la
+        // toca.
         origen: 'MANUAL',
-        refExterna: null,
       })
       .where(eq(transacciones.id, String(b.id)))
       .returning({ id: transacciones.id });

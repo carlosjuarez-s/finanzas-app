@@ -40,6 +40,31 @@ Todo lo que devuelve el modelo pasa por las funciones de `lib/guardar.ts`:
 conversión de números tolerante al formato argentino, defaults en los textos,
 fechas inválidas a `null` y períodos validados contra `YYYY-MM`.
 
+## Importar operaciones
+
+Una operacion importada mal es peor que una que falta: arrastra el promedio
+ponderado de todo el activo y no hay nada en la pantalla que lo indique. Dos
+reglas de ahi:
+
+- **Solo entra lo que ya esta en dolares.** Una compra de ETH contra BTC tiene
+  el precio expresado en BTC. Guardarla como si fueran dolares no da un numero
+  aproximado, da uno absurdo. Se omite, se cuenta y se dice cual y por que.
+- **La comision en otra moneda es cero, no el numero crudo.** Binance cobra en
+  BNB si tenes el descuento activado; sumar BNB a un costo en dolares es sumar
+  peras con manzanas.
+
+La identidad de una operacion importada es su `refExterna`, y **nunca se borra**:
+es lo unico que evita duplicar el historial al reimportar. Con id de la
+plataforma (`BINANCE:<par>:<id>`) dos compras identicas del mismo dia son dos
+operaciones distintas; sin id se cae a un hash del contenido y colapsan en una,
+que es el precio de no tener id. Corregir a mano cambia `origen` pero conserva
+la ref: la correccion ya esta protegida por el `onConflictDoNothing` del
+importador.
+
+Y los simbolos se descomponen con `exchangeInfo`, no partiendo el string:
+"ETHBTC" se puede leer ETH/BTC o ETHB/TC, y adivinar por prefijos falla con los
+activos nuevos.
+
 ## Quien entra a la app
 
 Dos puertas, nunca las dos a la vez: si `AUTH_GOOGLE_ID` y `AUTH_GOOGLE_SECRET`

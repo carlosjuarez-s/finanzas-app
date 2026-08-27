@@ -98,16 +98,18 @@ const categoriaValida = (v: unknown): string => {
 };
 
 /**
- * Movimientos de un export de broker. Devuelve cuantos entraron y cuantos ya
- * estaban: subir dos veces el mismo CSV no puede duplicar el historial, y es
- * exactamente lo que uno hace cuando no esta seguro de si ya lo subio.
+ * Movimientos de un export de broker o de la API. Devuelve cuantos entraron y
+ * cuantos ya estaban: importar dos veces no puede duplicar el historial, y es
+ * exactamente lo que uno hace cuando no esta seguro de si ya lo importo.
  *
- * La identidad de una operacion es su contenido, porque el CSV rara vez trae un
- * id: mismo activo, misma fecha, misma cantidad y mismo precio es la misma
- * operacion. Dos compras identicas el mismo dia colapsan en una — es el precio
- * de no tener id, y preferible a duplicar todo el historial.
+ * Cuando el movimiento trae `ref` —la API de Binance da un id de trade unico y
+ * estable— esa es la identidad. Sin ref se cae al contenido: mismo activo,
+ * misma fecha, misma cantidad y mismo precio es la misma operacion. Ahi dos
+ * compras identicas el mismo dia colapsan en una, que es el precio de no tener
+ * id y es preferible a duplicar todo el historial. Con ref eso no pasa: son dos
+ * operaciones distintas y se guardan las dos.
  */
-export async function guardarMovimientos(movs: MovimientoData[], origen: string) {
+export async function guardarMovimientos(movs: (MovimientoData & { ref?: string })[], origen: string) {
   let nuevos = 0, repetidos = 0, descartados = 0;
 
   for (const m of movs) {
@@ -118,7 +120,7 @@ export async function guardarMovimientos(movs: MovimientoData[], origen: string)
 
     if (!activo || !/^\d{4}-\d{2}-\d{2}$/.test(fecha) || cantidad <= 0) { descartados++; continue; }
 
-    const huella = createHash('sha256')
+    const huella = m.ref ?? `${origen}:` + createHash('sha256')
       .update(`${origen}|${activo}|${m.tipo}|${fecha}|${cantidad}|${precio}`)
       .digest('hex').slice(0, 32);
 
@@ -135,7 +137,7 @@ export async function guardarMovimientos(movs: MovimientoData[], origen: string)
       tipoCambioDia: null,
       comision: String(num(m?.comision)),
       origen,
-      refExterna: `${origen}:${huella}`,
+      refExterna: huella,
     })
       .onConflictDoNothing({ target: transacciones.refExterna })
       .returning({ id: transacciones.id });

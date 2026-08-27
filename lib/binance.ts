@@ -145,3 +145,77 @@ export async function preciosUsdt(activos: string[]): Promise<Record<string, num
   }
   return salida;
 }
+
+// ---------------------------------------------------------------------------
+// Historial de operaciones
+//
+// Es lo que le falta al portafolio para dejar de ser una foto: /api/v3/account
+// dice cuanto tenes, /api/v3/myTrades dice a que precio lo compraste.
+// ---------------------------------------------------------------------------
+
+/** Una fila cruda de /api/v3/myTrades, tal como la devuelve Binance. */
+export type TradeBinance = {
+  symbol: string;
+  id: number;
+  price: string;
+  qty: string;
+  quoteQty: string;
+  commission: string;
+  commissionAsset: string;
+  time: number;
+  isBuyer: boolean;
+};
+
+/** Como se descompone un simbolo, segun el propio exchange. */
+export type ParSimbolo = { simbolo: string; base: string; cotiza: string };
+
+// Las que valen ~1 dolar. Solo con estas de contraparte el precio de la
+// operacion ya viene en dolares y se puede guardar sin convertir nada.
+const ESTABLES_USD = new Set(['USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'DAI']);
+
+export const esEstableUsd = (activo: string) => ESTABLES_USD.has(activo);
+
+/**
+ * Todos los pares del exchange, con su base y su contraparte.
+ *
+ * Hace falta pedirlo y no partir el string: "ETHBTC" se puede leer como ETH/BTC
+ * o como ETHB/TC, y adivinar por prefijos falla con los activos nuevos. Binance
+ * es la unica autoridad sobre como se descompone cada simbolo.
+ *
+ * Es publico: no lleva firma ni credencial.
+ */
+export async function pares(): Promise<Map<string, ParSimbolo>> {
+  const res = await fetch(`${BASE}/api/v3/exchangeInfo?permissions=SPOT`, {
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new ErrorBinance(`No se pudo leer la lista de pares (${res.status}).`);
+
+  const json = await res.json() as { symbols?: { symbol: string; baseAsset: string; quoteAsset: string; status?: string }[] };
+  const mapa = new Map<string, ParSimbolo>();
+  for (const s of json.symbols ?? []) {
+    if (!s.symbol || !s.baseAsset || !s.quoteAsset) continue;
+    mapa.set(s.symbol, { simbolo: s.symbol, base: s.baseAsset, cotiza: s.quoteAsset });
+  }
+  return mapa;
+}
+
+/**
+ * Que pares consultar para una lista de activos.
+ *
+ * myTrades exige un simbolo: no existe "traeme todas mis operaciones". Hay que
+ * preguntar par por par, y cada consulta cuesta peso de rate limit, asi que se
+ * piden solo los pares contra dolares de los activos que efectivamente tenes.
+ */
+export function paresDeInteres(activos: string[], todos: Map<string, ParSimbolo>): ParSimbolo[] {
+  const buscados = new Set(activos.map(a => a.toUpperCase()).filter(a => !esEstableUsd(a)));
+  const salida: ParSimbolo[] = [];
+  for (const p of todos.values()) {
+    if (buscados.has(p.base) && esEstableUsd(p.cotiza)) salida.push(p);
+  }
+  return salida.sort((a, b) => a.simbolo.localeCompare(b.simbolo));
+}
+
+/** Operaciones de un par. Binance devuelve hasta 1000 por pedido. */
+export async function tradesDe(cred: CredencialBinance, simbolo: string): Promise<TradeBinance[]> {
+  return pedir<TradeBinance[]>('/api/v3/myTrades', cred, { symbol: simbolo, limit: 1000 });
+}
