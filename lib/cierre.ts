@@ -1,6 +1,7 @@
 import { desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, salaries, monthlyCloses, gastos } from '@/db/schema';
+import { statements, salaries, monthlyCloses, gastos, prestamos } from '@/db/schema';
+import { totalDelMes, periodosConCuota, type Prestamo } from './prestamos';
 
 export type Cierre = {
   periodo: string;
@@ -27,6 +28,19 @@ export function periodoSiguiente(periodo: string): string {
   return `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`;
 }
 
+/** Los prestamos, con los numericos ya convertidos: el resto del modulo hace cuentas. */
+export async function cargarPrestamos(): Promise<Prestamo[]> {
+  const filas = await db.select().from(prestamos);
+  return filas.map(f => ({
+    id: f.id, nombre: f.nombre, entidad: f.entidad,
+    montoOtorgado: f.montoOtorgado === null ? null : Number(f.montoOtorgado),
+    cuotas: Number(f.cuotas), cuotaArs: Number(f.cuotaArs),
+    primerPeriodo: f.primerPeriodo, moneda: f.moneda,
+    cftAnual: f.cftAnual === null ? null : Number(f.cftAnual),
+    canceladoEn: f.canceladoEn,
+  }));
+}
+
 // Unica fuente de verdad del calculo: la usan el dashboard (en vivo) y el
 // historico (persistido), asi no pueden divergir.
 export async function calcularCierre(periodo: string): Promise<Cierre> {
@@ -42,8 +56,13 @@ export async function calcularCierre(periodo: string): Promise<Cierre> {
   // pero salen del mismo bolsillo, asi que suman al gasto del mes.
   const sueltos = await db.select().from(gastos).where(eq(gastos.periodo, periodo));
 
+  // La cuota del mes se deriva del plan del prestamo, no se carga como gasto.
+  // Cargarla a mano ademas la contaria dos veces.
+  const cuotasArs = totalDelMes(await cargarPrestamos(), periodo);
+
   const gastoArs = sts.reduce((s, st) => s + Number(st.totalArs), 0)
-    + sueltos.reduce((s, g) => s + Number(g.montoArs), 0);
+    + sueltos.reduce((s, g) => s + Number(g.montoArs), 0)
+    + cuotasArs;
   const gastoUsd = sts.reduce((s, st) => s + Number(st.totalUsd), 0)
     + sueltos.reduce((s, g) => s + Number(g.montoUsd), 0);
   const percepArs = sts.reduce((s, st) => s + Number(st.percepArs), 0);
@@ -57,6 +76,7 @@ export async function calcularCierre(periodo: string): Promise<Cierre> {
   for (const g of sueltos) {
     porCategoria[g.categoria] = (porCategoria[g.categoria] ?? 0) + Number(g.montoArs);
   }
+  if (cuotasArs) porCategoria['Cuotas'] = (porCategoria['Cuotas'] ?? 0) + cuotasArs;
 
   return {
     periodo, ingresoArs, gastoArs, gastoUsd, percepArs, ahorroArs,
@@ -72,11 +92,18 @@ export async function guardarCierres(periodos?: string[]): Promise<string[]> {
   // dashboard puede mostrar. Filtrar contra esta lista evita crear filas de meses
   // futuros vacios cuando entra un recibo adelantado, que se verian como un mes
   // de 100% de ahorro. Un mes puede tener solo alquiler y servicios, sin tarjeta.
-  const [conResumenes, conGastos] = await Promise.all([
+  const [conResumenes, conGastos, prests] = await Promise.all([
     db.selectDistinct({ periodo: statements.periodo }).from(statements),
     db.selectDistinct({ periodo: gastos.periodo }).from(gastos),
+    cargarPrestamos(),
   ]);
-  const conDatos = [...new Set([...conResumenes, ...conGastos].map(r => r.periodo))];
+  // Un mes cuyo unico gasto es una cuota tambien es un mes: sin esto no
+  // existiria en el historico y el grafico mostraria un hueco.
+  const conDatos = [...new Set([
+    ...conResumenes.map(r => r.periodo),
+    ...conGastos.map(r => r.periodo),
+    ...periodosConCuota(prests),
+  ])];
   const objetivo = periodos ? conDatos.filter(p => periodos.includes(p)) : conDatos;
 
   for (const periodo of objetivo) {

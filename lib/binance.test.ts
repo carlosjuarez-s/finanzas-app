@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { firmar } from './binance';
+import { firmar, preciosUsdt } from './binance';
 
 // La firma es lo unico de este cliente que se puede verificar sin llamar a la
 // API. Si esta mal, todos los pedidos vuelven 401 y no hay forma de saber por
@@ -19,4 +19,25 @@ test('la firma cambia con cualquier variacion', () => {
   assert.notEqual(base, firmar('symbol=ETHUSDT&timestamp=1', secret));   // otro simbolo
   assert.notEqual(base, firmar('symbol=BTCUSDT&timestamp=1', 'otro'));   // otro secreto
   assert.equal(base, firmar('symbol=BTCUSDT&timestamp=1', secret));      // determinista
+});
+
+test('un 451 se explica como geo-bloqueo y no como problema de la clave', async () => {
+  // La reaccion natural ante un error de Binance es ir a revisar la API key.
+  // Con 451 eso es perder el tiempo: la clave esta bien, el bloqueado es el
+  // servidor. El mensaje tiene que decirlo y decir donde se arregla.
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response('', { status: 451 })) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => preciosUsdt(['BTC']),
+      (e: Error) => {
+        assert.match(e.message, /451/);
+        assert.match(e.message, /No es un problema de tu clave/);
+        assert.match(e.message, /gru1/);
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
 });

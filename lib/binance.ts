@@ -48,6 +48,21 @@ function queryFirmado(params: Record<string, string | number>, apiSecret: string
 // el que aparece cuando la clave vencio por no tener restriccion de IP.
 const CODIGOS_CREDENCIAL = new Set([-2014, -2015, -1022, -2008]);
 
+/**
+ * 451 no es un problema de la clave: es Binance bloqueando el pais desde donde
+ * sale el pedido. No lo manda el navegador, lo manda el servidor de Vercel, asi
+ * que no importa desde donde estes vos.
+ *
+ * El mensaje dice que hacer, porque "451" no significa nada para nadie y la
+ * primera reaccion natural es ir a revisar la API key, que esta perfecta.
+ */
+const MENSAJE_451 =
+  'Binance bloquea el pais desde donde corre la app (error 451). No es un problema de tu ' +
+  'clave: el pedido sale del servidor de Vercel, no de tu telefono. Las funciones tienen ' +
+  'que correr en una region que Binance no restrinja — vercel.json ya pide gru1 (San Pablo), ' +
+  'asi que revisa que el ultimo deploy la haya tomado. En Vercel: Settings > Functions > ' +
+  'Function Region.';
+
 async function pedir<T>(
   ruta: string, cred: CredencialBinance, params: Record<string, string | number> = {},
 ): Promise<T> {
@@ -65,6 +80,8 @@ async function pedir<T>(
     // El mensaje de red puede incluir la URL completa, con la firma adentro.
     throw new ErrorBinance(`No se pudo conectar con Binance: ${errorCensurado(e, secretos)}`);
   }
+
+  if (res.status === 451) throw new ErrorBinance(MENSAJE_451);
 
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => '');
@@ -129,6 +146,7 @@ export async function preciosUsdt(activos: string[]): Promise<Record<string, num
   if (!activos.length) return {};
 
   const res = await fetch(`${BASE}/api/v3/ticker/price`, { signal: AbortSignal.timeout(15000) });
+  if (res.status === 451) throw new ErrorBinance(MENSAJE_451);
   if (!res.ok) throw new ErrorBinance(`No se pudieron leer los precios (${res.status}).`);
 
   const todos = await res.json() as { symbol: string; price: string }[];
@@ -188,6 +206,7 @@ export async function pares(): Promise<Map<string, ParSimbolo>> {
   const res = await fetch(`${BASE}/api/v3/exchangeInfo?permissions=SPOT`, {
     signal: AbortSignal.timeout(20000),
   });
+  if (res.status === 451) throw new ErrorBinance(MENSAJE_451);
   if (!res.ok) throw new ErrorBinance(`No se pudo leer la lista de pares (${res.status}).`);
 
   const json = await res.json() as { symbols?: { symbol: string; baseAsset: string; quoteAsset: string; status?: string }[] };

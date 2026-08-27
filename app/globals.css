@@ -230,3 +230,20 @@ section > h2 {
 
 .boton-google:hover { background: #f7f8f8; border-color: #c9ccd0; }
 .boton-google svg { flex: none; }
+
+/* Avance de un prestamo: cuantas cuotas van, de un vistazo. La barra dice lo
+   que "8 de 24" tarda en decir. */
+.avance {
+  display: block;
+  height: 4px;
+  max-width: 220px;
+  margin: 7px 0 2px;
+  background: var(--linea);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.avance > span {
+  display: block;
+  height: 100%;
+  background: var(--peso);
+}

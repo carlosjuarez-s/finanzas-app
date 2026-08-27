@@ -1,12 +1,15 @@
 import { desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, salaries, gastos } from '@/db/schema';
+import { cargarPrestamos } from '@/lib/cierre';
+import { totalDelMes, type Prestamo } from '@/lib/prestamos';
 import { fmtArs, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import GastoTexto from '../gasto-texto';
 import BarChart from '../bar-chart';
+import Prestamos from './prestamos';
 import Editor, { type Item } from './editor';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +21,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   let sueltos: typeof gastos.$inferSelect[] = [];
   let sts: Awaited<ReturnType<typeof cargarStatements>> = [];
   let sueldo: typeof salaries.$inferSelect | undefined;
+  let prestamos: Prestamo[] = [];
 
   async function cargarStatements(p: string) {
     return db.query.statements.findMany({ where: eq(statements.periodo, p), with: { consumos: true } });
@@ -33,6 +37,10 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
     // El mes mas reciente con algo cargado, sea tarjeta o gasto suelto.
     periodo = qp ?? [ultimoSt?.periodo, ultimoGasto[0]?.periodo].filter(Boolean).sort().pop();
     if (!periodo) {
+      // Sin gastos todavia se puede estar pagando un credito, y hay que poder
+      // cargarlo: si no, la unica forma de llegar a esta seccion seria subir
+      // primero un comprobante que no tiene nada que ver.
+      const mesActual = new Date().toISOString().slice(0, 7);
       return (
         <main>
           <Nav />
@@ -40,6 +48,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
           <h1>Sin gastos cargados</h1>
           <p>Subí un comprobante desde el cierre, o anotá uno acá abajo.</p>
           <GastoTexto />
+          <Prestamos prestamos={await cargarPrestamos()} periodo={mesActual} />
         </main>
       );
     }
@@ -47,13 +56,14 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
     const [y, m] = periodo.split('-').map(Number);
     const anterior = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
 
-    [sts, sueltos, sueldo] = await Promise.all([
+    [sts, sueltos, sueldo, prestamos] = await Promise.all([
       cargarStatements(periodo),
       db.select().from(gastos).where(eq(gastos.periodo, periodo)),
       db.query.salaries.findFirst({
         where: inArray(salaries.periodo, [anterior, periodo]),
         orderBy: desc(salaries.periodo),
       }),
+      cargarPrestamos(),
     ]);
   } catch (e) {
     const tabla = tablaFaltante(e);
@@ -77,6 +87,10 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   for (const i of [...itemsGastos, ...itemsConsumos]) {
     if (i.categoria) acum.set(i.categoria, (acum.get(i.categoria) ?? 0) + i.monto);
   }
+  // La cuota no es un item cargado, sale del plan del prestamo: si no entra
+  // acá, el grafico muestra menos gasto del que el cierre esta contando.
+  const cuotas = totalDelMes(prestamos, periodo);
+  if (cuotas) acum.set('Cuotas', (acum.get('Cuotas') ?? 0) + cuotas);
   const porCategoria = [...acum.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([etiqueta, valor]) => ({ etiqueta, valor }));
@@ -99,6 +113,8 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
       )}
 
       <GastoTexto />
+
+      <Prestamos prestamos={prestamos} periodo={periodo} />
 
       <section>
         <h2>

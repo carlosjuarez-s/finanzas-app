@@ -40,6 +40,23 @@ Todo lo que devuelve el modelo pasa por las funciones de `lib/guardar.ts`:
 conversión de números tolerante al formato argentino, defaults en los textos,
 fechas inválidas a `null` y períodos validados contra `YYYY-MM`.
 
+## Prestamos
+
+Un prestamo no es un gasto: es un compromiso con cronograma. Se guarda **el plan**
+(cuantas cuotas, de cuanto, desde cuando), no una fila por cuota — una fila por
+cuota se desincroniza en cuanto se corrige un monto, y obliga a un proceso
+mensual que "avance" el credito. Cual cuota cae en cada mes se deriva con
+`lib/prestamos.ts`, que es puro y no toca la base.
+
+La cuota del mes entra al cierre **calculada al vuelo**, en la categoria
+`Cuotas`. De ahi la unica regla que hay que respetar: la misma cuota no puede
+entrar por dos lados. Si ademas se carga como gasto suelto, o si el credito
+debita en el resumen de la tarjeta, se cuenta dos veces y el ahorro del mes sale
+mal. La pantalla lo dice; si agregas otra via de carga, decilo ahi tambien.
+
+Cancelar anticipadamente corta **desde** ese mes, no despues: cancelaste en
+junio, la cuota de junio ya no se paga.
+
 ## Importar operaciones
 
 Una operacion importada mal es peor que una que falta: arrastra el promedio

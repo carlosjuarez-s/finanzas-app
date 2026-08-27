@@ -97,6 +97,35 @@ export const gastos = pgTable('gastos', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Prestamos y creditos. No son un gasto: son un compromiso con cronograma.
+//
+// Se guarda el plan (cuantas cuotas, de cuanto, desde cuando) y no una fila por
+// cuota: con el plan se deriva cual cuota cae en cada mes, cuantas faltan y
+// cuanto se debe, sin depender de que alguien corra un proceso todos los meses.
+// Una fila por cuota se desincroniza en cuanto cambia algo.
+//
+// La cuota del mes entra al cierre desde acá, calculada al vuelo. Por eso no
+// hay que cargarla ademas como gasto suelto: se contaria dos veces.
+export const prestamos = pgTable('prestamos', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  nombre: text('nombre').notNull(),                // "Prestamo personal Galicia"
+  entidad: text('entidad'),                        // banco o financiera
+  // Lo que te prestaron. Es informativo: el gasto mensual sale de la cuota, y
+  // la suma de las cuotas siempre es mayor que esto (esa diferencia es el costo).
+  montoOtorgado: numeric('monto_otorgado', { precision: 14, scale: 2 }),
+  cuotas: numeric('cuotas', { precision: 5, scale: 0 }).notNull(),
+  cuotaArs: numeric('cuota_ars', { precision: 14, scale: 2 }).notNull(),
+  primerPeriodo: text('primer_periodo').notNull(), // YYYY-MM de la cuota 1
+  moneda: text('moneda').notNull().default('ARS'), // ARS | USD
+  // CFT anual si lo sabes. No se usa para calcular: se muestra, porque es el
+  // numero que permite comparar dos prestamos y casi nunca esta a la vista.
+  cftAnual: numeric('cft_anual', { precision: 8, scale: 2 }),
+  // Cancelado antes de tiempo: deja de sumar al cierre desde el mes indicado.
+  canceladoEn: text('cancelado_en'),               // YYYY-MM, opcional
+  notas: text('notas'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Metas de ahorro. La moneda importa: una meta en pesos a dos años no dice nada
 // sin ajuste, asi que el default es USD y el progreso se mide en USD reales.
 export const goals = pgTable('goals', {
