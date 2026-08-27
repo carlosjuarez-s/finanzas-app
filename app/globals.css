@@ -156,6 +156,23 @@ section > h2 {
 
 /* Mobile. Esta app se usa sobre todo desde el celular, asi que estas reglas no
    son un parche: son el caso principal. Verificado con scripts/responsive.mjs. */
+/* En un prestamo la descripcion es larga —persona, concepto, fecha, cuanto
+   devolvio— y al lado no le queda ancho. En mobile las acciones bajan y ocupan
+   el ancho completo, que ademas hace los botones mas faciles de tocar. */
+.fila-fiado .fiado-acciones { text-align: right; }
+
+@media (max-width: 560px) {
+  .fila-fiado { flex-direction: column; align-items: stretch; gap: 8px; }
+  .fila-fiado .fiado-acciones {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+  }
+  .fila-fiado .fiado-acciones > .monto { display: block; }
+}
+
 @media (max-width: 560px) {
   /* La ecuacion del cierre en 5 columnas no entra en 375px y genera scroll
      horizontal. Apilada se lee igual de bien, de arriba hacia abajo. */

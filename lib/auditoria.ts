@@ -25,6 +25,9 @@ export type DatosAuditoria = {
   tenencias: { activo: string; cantidad: number }[];
   activosConLibro: string[];
   conexiones: { etiqueta: string; estado: string; ultimoSync: Date | null }[];
+  /** Plata prestada a personas, con lo que falta cobrar. Opcional: el resto de
+   *  la auditoria no depende de esto y no queremos romper a quien no lo pase. */
+  fiados?: { persona: string; pendiente: number; moneda: string; diasDesde: number | null; huboDevolucion: boolean }[];
   ahorroAcumuladoUsd: number;
   tipoCambioArs: number;
   hoy: string;   // YYYY-MM
@@ -208,6 +211,23 @@ export function auditar(d: DatosAuditoria): Hallazgo[] {
         accion: 'Revisa los consumos del mes en Gastos.',
       });
     }
+  }
+
+  // --- Plata prestada que nadie devolvio -----------------------------------
+  // Es lo que mas se olvida: no vence, no manda recordatorio y no aparece en
+  // ningun resumen. Seis meses sin una sola devolucion ya no es "todavia no".
+  const olvidados = (d.fiados ?? []).filter(
+    f => f.pendiente > 0 && !f.huboDevolucion && f.diasDesde !== null && f.diasDesde >= 180,
+  );
+  for (const f of olvidados) {
+    const meses = Math.floor((f.diasDesde as number) / 30);
+    out.push({
+      id: `fiado-${f.persona}`,
+      severidad: 'media',
+      titulo: `Le prestaste a ${f.persona} hace ${meses} meses y no devolvio nada`,
+      detalle: `Quedan ${f.moneda} ${Math.round(f.pendiente).toLocaleString('es-AR')} sin devolver, sin ninguna devolucion anotada desde que prestaste.`,
+      accion: 'Si ya te devolvio, anotalo en Gastos. Si no, es el momento de preguntar — o de darlo por perdido y dejar de contarlo.',
+    });
   }
 
   const orden: Record<Severidad, number> = { alta: 0, media: 1, baja: 2 };

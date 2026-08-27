@@ -214,6 +214,40 @@ export const settings = pgTable('settings', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Plata que le prestaste a alguien y te tiene que devolver.
+//
+// NO es un gasto. Salio de tu bolsillo, pero sigue siendo tuya: es un credito a
+// favor, no plata consumida. Contarla como gasto hundiria la tasa de ahorro del
+// mes en que prestas y la inflaria cuando te devuelven, dos veces mal por el
+// mismo movimiento. Por eso vive aparte y no toca `calcularCierre`.
+//
+// La devolucion casi nunca es de una: se paga por partes, cuando se puede. Por
+// eso las devoluciones son filas propias y el saldo se deriva, en vez de un
+// campo "devuelto" que hay que acordarse de actualizar.
+export const prestamosPersonales = pgTable('prestamos_personales', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  persona: text('persona').notNull(),              // a quien le prestaste
+  concepto: text('concepto'),                      // "para el alquiler", "arreglo del auto"
+  monto: numeric('monto', { precision: 14, scale: 2 }).notNull(),
+  moneda: text('moneda').notNull().default('ARS'), // ARS | USD
+  fecha: text('fecha').notNull(),                  // YYYY-MM-DD
+  // Darlo por perdido es una decision, no un olvido: deja de figurar como algo
+  // que esperas cobrar, pero la fila queda para no volver a prestar sin saberlo.
+  perdonado: boolean('perdonado').notNull().default(false),
+  notas: text('notas'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const devoluciones = pgTable('devoluciones', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  prestamoId: text('prestamo_id').notNull()
+    .references(() => prestamosPersonales.id, { onDelete: 'cascade' }),
+  fecha: text('fecha').notNull(),                  // YYYY-MM-DD
+  monto: numeric('monto', { precision: 14, scale: 2 }).notNull(),
+  notas: text('notas'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const statementsRelations = relations(statements, ({ many }) => ({ consumos: many(consumos) }));
 export const consumosRelations = relations(consumos, ({ one }) => ({
   statement: one(statements, { fields: [consumos.statementId], references: [statements.id] }),
@@ -221,4 +255,13 @@ export const consumosRelations = relations(consumos, ({ one }) => ({
 export const snapshotsRelations = relations(portfolioSnapshots, ({ many }) => ({ positions: many(positions) }));
 export const positionsRelations = relations(positions, ({ one }) => ({
   snapshot: one(portfolioSnapshots, { fields: [positions.snapshotId], references: [portfolioSnapshots.id] }),
+}));
+
+export const prestamosPersonalesRelations = relations(prestamosPersonales, ({ many }) => ({
+  devoluciones: many(devoluciones),
+}));
+export const devolucionesRelations = relations(devoluciones, ({ one }) => ({
+  prestamo: one(prestamosPersonales, {
+    fields: [devoluciones.prestamoId], references: [prestamosPersonales.id],
+  }),
 }));

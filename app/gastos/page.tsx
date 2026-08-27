@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { statements, salaries, gastos } from '@/db/schema';
 import { cargarPrestamos } from '@/lib/cierre';
 import { totalDelMes, type Prestamo } from '@/lib/prestamos';
+import type { PrestamoPersonal } from '@/lib/fiado';
 import { fmtArs, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
@@ -10,21 +11,38 @@ import FaltaMigracion from '../falta-migracion';
 import GastoTexto from '../gasto-texto';
 import BarChart from '../bar-chart';
 import Prestamos from './prestamos';
+import Fiado from './fiado';
 import Editor, { type Item } from './editor';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Gastos({ searchParams }: { searchParams: Promise<{ periodo?: string }> }) {
   const { periodo: qp } = await searchParams;
+  // La fecha la fija el servidor: si la calculara el cliente, dos telefonos en
+  // zonas distintas mostrarian "hace 7 meses" y "hace 8" para el mismo prestamo.
+  const hoyISO = new Date().toISOString().slice(0, 10);
 
   let periodo: string | undefined;
   let sueltos: typeof gastos.$inferSelect[] = [];
   let sts: Awaited<ReturnType<typeof cargarStatements>> = [];
   let sueldo: typeof salaries.$inferSelect | undefined;
   let prestamos: Prestamo[] = [];
+  let fiados: PrestamoPersonal[] = [];
 
   async function cargarStatements(p: string) {
     return db.query.statements.findMany({ where: eq(statements.periodo, p), with: { consumos: true } });
+  }
+
+  // Los prestamos a personas no dependen del mes: lo que te deben te lo deben
+  // hoy, sin importar que cierre estes mirando.
+  async function cargarFiados(): Promise<PrestamoPersonal[]> {
+    const filas = await db.query.prestamosPersonales.findMany({ with: { devoluciones: true } });
+    return filas.map(f => ({
+      id: f.id, persona: f.persona, concepto: f.concepto,
+      monto: Number(f.monto), moneda: f.moneda, fecha: f.fecha,
+      perdonado: f.perdonado,
+      devoluciones: f.devoluciones.map(d => ({ id: d.id, fecha: d.fecha, monto: Number(d.monto) })),
+    }));
   }
 
   try {
@@ -49,6 +67,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
           <p>Subí un comprobante desde el cierre, o anotá uno acá abajo.</p>
           <GastoTexto />
           <Prestamos prestamos={await cargarPrestamos()} periodo={mesActual} />
+          <Fiado prestamos={await cargarFiados()} hoy={hoyISO} />
         </main>
       );
     }
@@ -56,7 +75,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
     const [y, m] = periodo.split('-').map(Number);
     const anterior = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
 
-    [sts, sueltos, sueldo, prestamos] = await Promise.all([
+    [sts, sueltos, sueldo, prestamos, fiados] = await Promise.all([
       cargarStatements(periodo),
       db.select().from(gastos).where(eq(gastos.periodo, periodo)),
       db.query.salaries.findFirst({
@@ -64,6 +83,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
         orderBy: desc(salaries.periodo),
       }),
       cargarPrestamos(),
+      cargarFiados(),
     ]);
   } catch (e) {
     const tabla = tablaFaltante(e);
@@ -115,6 +135,8 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
       <GastoTexto />
 
       <Prestamos prestamos={prestamos} periodo={periodo} />
+
+      <Fiado prestamos={fiados} hoy={hoyISO} />
 
       <section>
         <h2>

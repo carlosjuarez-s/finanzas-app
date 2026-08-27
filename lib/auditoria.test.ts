@@ -131,3 +131,36 @@ test('los hallazgos vienen ordenados por severidad', () => {
     assert.ok(orden[sev[i - 1]] <= orden[sev[i]], 'las altas van primero');
   }
 });
+
+test('avisa de la plata prestada que nadie devolvio', () => {
+  // Es lo que mas se olvida: no vence, no manda recordatorio y no aparece en
+  // ningun resumen.
+  const [h] = auditar({ ...base(), fiados: [
+    { persona: 'Javier', pendiente: 150_000, moneda: 'ARS', diasDesde: 240, huboDevolucion: false },
+  ] }).filter(x => x.id.startsWith('fiado-'));
+
+  assert.ok(h, 'deberia haber un hallazgo');
+  assert.match(h.titulo, /Javier/);
+  assert.match(h.titulo, /8 meses/);
+});
+
+test('no avisa si viene devolviendo, aunque falte plata', () => {
+  // Alguien que devuelve de a poco no es el caso que hay que empujar.
+  const hs = auditar({ ...base(), fiados: [
+    { persona: 'Javier', pendiente: 60_000, moneda: 'ARS', diasDesde: 300, huboDevolucion: true },
+  ] }).filter(x => x.id.startsWith('fiado-'));
+  assert.equal(hs.length, 0);
+});
+
+test('no avisa por un prestamo reciente ni por uno ya saldado', () => {
+  const hs = auditar({ ...base(), fiados: [
+    { persona: 'Reciente', pendiente: 100_000, moneda: 'ARS', diasDesde: 40, huboDevolucion: false },
+    { persona: 'Saldado', pendiente: 0, moneda: 'ARS', diasDesde: 900, huboDevolucion: false },
+    { persona: 'SinFecha', pendiente: 100_000, moneda: 'ARS', diasDesde: null, huboDevolucion: false },
+  ] }).filter(x => x.id.startsWith('fiado-'));
+  assert.equal(hs.length, 0);
+});
+
+test('sin fiados la auditoria sigue funcionando', () => {
+  assert.doesNotThrow(() => auditar(base()));
+});

@@ -87,6 +87,30 @@ de la serie; el color lo lleva la marca al lado. La unica excepcion es el texto
 Ojo con `.leyenda`: es del grafico de lineas, con marca de 12x2. La barra
 apilada usa `.leyenda-apilada` justamente para no pisarla.
 
+## Prestar no es gastar
+
+La plata que le prestas a alguien salio de tu bolsillo pero **sigue siendo
+tuya**: lo que cambio es en que forma la tenes, de efectivo a credito a favor.
+Por eso `prestamos_personales` no toca `calcularCierre`. Si lo tocara, el mes en
+que prestas mostraria una tasa de ahorro pesima y el mes en que te devuelven una
+buenisima — dos veces mal por el mismo movimiento.
+
+La devolucion casi nunca es de una sola vez, asi que las devoluciones son filas
+propias (`devoluciones`) y el saldo se **deriva**. Nada de un campo "devuelto"
+que haya que acordarse de actualizar.
+
+Dos detalles que salieron de mirar los casos reales:
+
+- Devolver de mas no genera un pendiente negativo. Si te devolvieron mas, es un
+  regalo o un error de carga; en ninguno de los dos casos le debes vos algo.
+- Los montos se comparan con tolerancia de un centavo. `0.1 + 0.2 !== 0.3` en
+  flotante, y sin tolerancia un prestamo devuelto entero queda "PARCIAL" con un
+  saldo de fracciones de centavo.
+
+Y las fechas se validan con `fechaValida()`, no solo con el regex: "2026-02-30"
+tiene la forma correcta y `Date` la convierte calladita en el 2 de marzo, asi
+que un error de tipeo quedaria guardado como otra fecha valida.
+
 ## Prestamos
 
 Un prestamo no es un gasto: es un compromiso con cronograma. Se guarda **el plan**

@@ -1,10 +1,11 @@
 import { asc, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { monthlyCloses, gastos, goals, transacciones, portfolioSnapshots } from '@/db/schema';
+import { monthlyCloses, gastos, goals, transacciones, portfolioSnapshots, prestamosPersonales } from '@/db/schema';
 import { auditar, type Hallazgo, type DatosAuditoria } from './auditoria';
 import { listarConexiones } from './conexiones';
 import { leerSupuestos, ahorroAcumuladoUsd } from './supuestos';
 import { redactarProfundo } from './pii';
+import { resumir, type PrestamoPersonal } from './fiado';
 import { ANALISIS_SYSTEM } from './prompts';
 
 // Analisis de la situacion financiera.
@@ -31,13 +32,22 @@ export type Analisis = {
 };
 
 export async function reunirDatos(): Promise<DatosAuditoria> {
-  const [cierres, sueltos, metas, supuestos, conexiones] = await Promise.all([
+  const hoyISO = new Date().toISOString().slice(0, 10);
+
+  const [cierres, sueltos, metas, supuestos, conexiones, filasFiado] = await Promise.all([
     db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
     db.select().from(gastos),
     db.select().from(goals),
     leerSupuestos(),
     listarConexiones(),
+    db.query.prestamosPersonales.findMany({ with: { devoluciones: true } }),
   ]);
+
+  const fiados: PrestamoPersonal[] = filasFiado.map(f => ({
+    id: f.id, persona: f.persona, concepto: f.concepto,
+    monto: Number(f.monto), moneda: f.moneda, fecha: f.fecha, perdonado: f.perdonado,
+    devoluciones: f.devoluciones.map(d => ({ id: d.id, fecha: d.fecha, monto: Number(d.monto) })),
+  }));
 
   const snaps = await db.query.portfolioSnapshots.findMany({
     orderBy: desc(portfolioSnapshots.periodo), with: { positions: true }, limit: 4,
@@ -64,6 +74,13 @@ export async function reunirDatos(): Promise<DatosAuditoria> {
     activosConLibro,
     // Solo etiqueta y estado: ni el secreto ni la pista salen de aca.
     conexiones: conexiones.map(c => ({ etiqueta: c.etiqueta, estado: c.estado, ultimoSync: c.ultimoSync })),
+    fiados: fiados.map(f => {
+      const r = resumir(f, hoyISO);
+      return {
+        persona: f.persona, pendiente: r.pendiente, moneda: f.moneda,
+        diasDesde: r.diasDesde, huboDevolucion: r.devuelto > 0,
+      };
+    }),
     ahorroAcumuladoUsd: await ahorroAcumuladoUsd(supuestos.tipoCambioArs),
     tipoCambioArs: supuestos.tipoCambioArs,
     hoy: new Date().toISOString().slice(0, 7),
