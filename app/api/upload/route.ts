@@ -10,6 +10,7 @@ import { mensajeDeError } from '@/lib/errores';
 
 import { esArchivoTexto, esArchivoBinario, type ResultadoArchivo } from '@/lib/tipos';
 import { idUsuarioActual } from '@/lib/usuario';
+import { esArchivoExcel, excelATexto, ErrorExcel } from '@/lib/excel';
 
 export const maxDuration = 300;
 
@@ -35,9 +36,14 @@ export async function POST(req: NextRequest) {
   for (const file of files) {
     const nombre = file.name || 'archivo';
     try {
-      const archivoTexto = esArchivoTexto(file.name, file.type);
+      // Una planilla no es texto ni se le puede mostrar al modelo como un PDF:
+      // es un zip con XML adentro. Se convierte a tabla y entra por el mismo
+      // camino que un CSV, reusando clasificacion, censura de PII y dedup.
+      const archivoExcel = esArchivoExcel(file.name, file.type);
+      const archivoTexto = archivoExcel || esArchivoTexto(file.name, file.type);
+
       if (!archivoTexto && !esArchivoBinario(file.type)) {
-        resultados.push({ nombre, estado: 'error', detalle: `Tipo no soportado (${file.type || 'desconocido'}). Se aceptan PDF, PNG, JPG, WEBP, CSV y TXT.` });
+        resultados.push({ nombre, estado: 'error', detalle: `Tipo no soportado (${file.type || 'desconocido'}). Se aceptan PDF, PNG, JPG, WEBP, CSV, TXT y XLSX.` });
         continue;
       }
 
@@ -62,9 +68,20 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // --- Archivos de texto (CSV, TXT) ---------------------------------
+      // --- Texto y planillas (CSV, TXT, XLSX) ---------------------------
       if (archivoTexto) {
-        const contenido = buf.toString('utf8');
+        let contenido: string;
+        try {
+          contenido = archivoExcel ? await excelATexto(buf) : buf.toString('utf8');
+        } catch (e) {
+          // El error de una planilla dice que hacer (guardala como .xlsx,
+          // exportala a CSV): vale mas que el mensaje generico del catch.
+          if (e instanceof ErrorExcel) {
+            resultados.push({ nombre, estado: 'error', detalle: e.message });
+            continue;
+          }
+          throw e;
+        }
         if (!contenido.trim()) {
           resultados.push({ nombre, estado: 'error', detalle: 'El archivo esta vacio.' });
           continue;

@@ -153,6 +153,24 @@ Y los simbolos se descomponen con `exchangeInfo`, no partiendo el string:
 "ETHBTC" se puede leer ETH/BTC o ETHB/TC, y adivinar por prefijos falla con los
 activos nuevos.
 
+## Planillas
+
+Un `.xlsx` no es texto ni se le puede mostrar al modelo como un PDF: es un zip
+con XML adentro. `lib/excel.ts` lo convierte a tabla delimitada y lo mete por el
+**mismo camino que un CSV**, asi reusa la clasificacion, la censura de PII antes
+de mandar nada al modelo, y la deduplicacion.
+
+Lo que la conversion tiene que resolver, y que se rompe en silencio si no:
+
+- Las fechas salen `YYYY-MM-DD`, no el numero de serie de Excel.
+- De una formula sale el **resultado**, no `SUM(D2:D5)`.
+- Un error de celda (`#N/A`) sale vacio: mandarlo como texto le hace inventar.
+- El nombre de cada hoja va adelante. En un export de banco las hojas suelen ser
+  meses o cuentas, y esa etiqueta es dato.
+
+Un archivo subido es entrada no confiable: un zip de 50 kB descomprime a cientos
+de megas. Hay tope de bytes **antes** de parsear, y de filas despues.
+
 ## Servidor MCP
 
 `app/api/mcp` expone las finanzas a Claude Desktop / Claude Code. Tres reglas:
