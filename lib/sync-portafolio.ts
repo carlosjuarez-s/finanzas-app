@@ -1,3 +1,4 @@
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { transacciones, eventosActivo } from '@/db/schema';
 import { listarConexiones, leerCredencial, marcarError, marcarSync } from './conexiones';
@@ -18,11 +19,11 @@ export type ResultadoSync = {
  * periodo. Reusa las tablas que ya llenaban las capturas, asi el historico y
  * las metas siguen funcionando sin cambios.
  */
-export async function sincronizarPortafolio(periodo?: string): Promise<ResultadoSync[]> {
+export async function sincronizarPortafolio(usuarioId: string, periodo?: string): Promise<ResultadoSync[]> {
   const mes = periodo ?? new Date().toISOString().slice(0, 7);
   const salida: ResultadoSync[] = [];
 
-  for (const c of await listarConexiones()) {
+  for (const c of await listarConexiones(usuarioId)) {
     if (c.estado === 'VENCIDA') {
       salida.push({ conexion: c.etiqueta, plataforma: c.nombrePlataforma, estado: 'error', detalle: 'La credencial esta marcada como vencida: actualizala.' });
       continue;
@@ -34,11 +35,11 @@ export async function sincronizarPortafolio(periodo?: string): Promise<Resultado
 
     let cred: CredencialBinance | undefined;
     try {
-      cred = await leerCredencial<CredencialBinance>(c.id);
+      cred = await leerCredencial<CredencialBinance>(usuarioId, c.id);
       const saldos = await tenencias(cred);
 
       if (!saldos.length) {
-        await marcarSync(c.id);
+        await marcarSync(usuarioId, c.id);
         salida.push({ conexion: c.etiqueta, plataforma: c.nombrePlataforma, estado: 'ok', detalle: 'La cuenta no tiene saldos.' });
         continue;
       }
@@ -46,7 +47,7 @@ export async function sincronizarPortafolio(periodo?: string): Promise<Resultado
       const precios = await preciosUsdt(saldos.map(s => s.activo));
       const totalUsd = saldos.reduce((s, t) => s + (precios[t.activo] ?? 0) * t.cantidad, 0);
 
-      await guardarPortfolio(mes, {
+      await guardarPortfolio(usuarioId, mes, {
         plataforma: c.nombrePlataforma,
         totalUsd,
         totalArs: null,
@@ -59,7 +60,7 @@ export async function sincronizarPortafolio(periodo?: string): Promise<Resultado
         })),
       });
 
-      await marcarSync(c.id);
+      await marcarSync(usuarioId, c.id);
       const sinPrecio = saldos.filter(s => precios[s.activo] == null).length;
       salida.push({
         conexion: c.etiqueta, plataforma: c.nombrePlataforma, estado: 'ok',
@@ -69,7 +70,7 @@ export async function sincronizarPortafolio(periodo?: string): Promise<Resultado
       // La credencial va en la lista de secretos a censurar: el error de la API
       // puede traerla en el texto y esto se guarda en la base.
       const secretos = cred ? [cred.apiKey, cred.apiSecret] : [];
-      await marcarError(c.id, e, secretos);
+      await marcarError(usuarioId, c.id, e, secretos);
       salida.push({
         conexion: c.etiqueta, plataforma: c.nombrePlataforma, estado: 'error',
         detalle: errorCensurado(e, secretos),
@@ -80,13 +81,13 @@ export async function sincronizarPortafolio(periodo?: string): Promise<Resultado
 }
 
 /** Posiciones del libro con su cotizacion, y lo que no cierra contra el broker. */
-export async function resultadosPorActivo(precios: Record<string, number> = {}): Promise<{
+export async function resultadosPorActivo(usuarioId: string, precios: Record<string, number> = {}): Promise<{
   resultados: Resultado[];
   errores: string[];
 }> {
   const [txs, evs] = await Promise.all([
-    db.select().from(transacciones),
-    db.select().from(eventosActivo),
+    db.select().from(transacciones).where(eq(transacciones.usuarioId, usuarioId)),
+    db.select().from(eventosActivo).where(eq(eventosActivo.usuarioId, usuarioId)),
   ]);
 
   const libro: Transaccion[] = txs.map(t => ({
@@ -134,8 +135,9 @@ export { discrepancias };
  * el valor va a estar mal — por eso conviene cargar el ratio real como evento
  * inicial cuando se carga la primera compra de un CEDEAR.
  */
-export async function ratiosVigentes(): Promise<Record<string, number>> {
-  const evs = await db.select().from(eventosActivo);
+export async function ratiosVigentes(usuarioId: string): Promise<Record<string, number>> {
+  const evs = await db.select().from(eventosActivo)
+    .where(eq(eventosActivo.usuarioId, usuarioId));
   const salida: Record<string, number> = {};
   for (const e of evs) {
     const f = Number(e.factor);
@@ -145,8 +147,8 @@ export async function ratiosVigentes(): Promise<Record<string, number>> {
 }
 
 /** Clase de cada activo, segun como se cargo en el libro. */
-export async function clasesDeActivos(): Promise<{ activo: string; clase: string }[]> {
+export async function clasesDeActivos(usuarioId: string): Promise<{ activo: string; clase: string }[]> {
   const filas = await db.selectDistinct({ activo: transacciones.activo, clase: transacciones.clase })
-    .from(transacciones);
+    .from(transacciones).where(eq(transacciones.usuarioId, usuarioId));
   return filas;
 }

@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, portfolioSnapshots, gastos as tablaGastos } from '@/db/schema';
 import { calcularCierre, cargarPrestamos } from '@/lib/cierre';
@@ -12,6 +12,7 @@ import SyncButton from './sync-button';
 import UploadPanel from './upload-panel';
 import BarChart from './bar-chart';
 import StackedBar from './stacked-bar';
+import { idUsuarioActual } from '@/lib/usuario';
 
 // Paleta validada para tres categorias sobre el papel de la app (contraste,
 // separacion bajo daltonismo y piso de croma). No agregar un cuarto color sin
@@ -23,8 +24,12 @@ const COLOR_AHORRO = '#1E7A4F';
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ periodo?: string }> }) {
+  const usuarioId = await idUsuarioActual();
   const { periodo: qp } = await searchParams;
-  const ultimo = await db.query.statements.findFirst({ orderBy: desc(statements.periodo), columns: { periodo: true } });
+  const ultimo = await db.query.statements.findFirst({
+    where: eq(statements.usuarioId, usuarioId),
+    orderBy: desc(statements.periodo), columns: { periodo: true },
+  });
   const periodo = qp ?? ultimo?.periodo;
   if (!periodo) {
     return (
@@ -39,16 +44,19 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     );
   }
 
-  const sts = await db.query.statements.findMany({ where: eq(statements.periodo, periodo), with: { consumos: true } });
+  const sts = await db.query.statements.findMany({
+    where: and(eq(statements.usuarioId, usuarioId), eq(statements.periodo, periodo)),
+    with: { consumos: true },
+  });
   const snapshots = await db.query.portfolioSnapshots.findMany({
-    where: eq(portfolioSnapshots.periodo, periodo),
+    where: and(eq(portfolioSnapshots.usuarioId, usuarioId), eq(portfolioSnapshots.periodo, periodo)),
     with: { positions: true },
   });
 
   // Mismo calculo que persiste el historico: si divergieran, el dashboard y los
   // graficos mostrarian numeros distintos para el mismo mes.
   const { ingresoArs: neto, gastoArs, gastoUsd, percepArs: percep, ahorroArs: ahorro, tasaAhorro: tasa, porCategoria } =
-    await calcularCierre(periodo);
+    await calcularCierre(usuarioId, periodo);
 
   const cats = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
 
@@ -57,8 +65,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   // mostrar sin que los segmentos chicos desaparezcan.
   const tarjetasArs = sts.reduce((s, st) => s + Number(st.totalArs), 0);
   const [sueltosDelMes, prestamosCargados] = await Promise.all([
-    db.select().from(tablaGastos).where(eq(tablaGastos.periodo, periodo)),
-    cargarPrestamos(),
+    db.select().from(tablaGastos)
+      .where(and(eq(tablaGastos.usuarioId, usuarioId), eq(tablaGastos.periodo, periodo))),
+    cargarPrestamos(usuarioId),
   ]);
   const otrosArs = sueltosDelMes.reduce((s, g) => s + Number(g.montoArs), 0)
     + totalDelMes(prestamosCargados, periodo);
@@ -69,7 +78,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const esMesActual = periodo === new Date().toISOString().slice(0, 7);
   let preciosHoy: Record<string, number> = {};
   if (esMesActual && snapshots.length) {
-    const [clases, ratios] = await Promise.all([clasesDeActivos(), ratiosVigentes()]);
+    const [clases, ratios] = await Promise.all([clasesDeActivos(usuarioId), ratiosVigentes(usuarioId)]);
     preciosHoy = (await preciosDePortafolio(clases, ratios)).precios;
   }
 

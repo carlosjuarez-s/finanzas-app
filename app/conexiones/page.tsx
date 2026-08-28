@@ -4,14 +4,16 @@ import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import Panel from './panel';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Conexiones() {
+  const usuarioId = await idUsuarioActual();
   const boveda = estadoBoveda();
   let conexiones;
   try {
-    conexiones = await listarConexiones();
+    conexiones = await listarConexiones(usuarioId);
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;

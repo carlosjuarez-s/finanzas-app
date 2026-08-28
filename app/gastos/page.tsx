@@ -1,6 +1,6 @@
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, salaries, gastos } from '@/db/schema';
+import { statements, salaries, gastos, prestamosPersonales } from '@/db/schema';
 import { cargarPrestamos } from '@/lib/cierre';
 import { totalDelMes, type Prestamo } from '@/lib/prestamos';
 import type { PrestamoPersonal } from '@/lib/fiado';
@@ -13,10 +13,12 @@ import BarChart from '../bar-chart';
 import Prestamos from './prestamos';
 import Fiado from './fiado';
 import Editor, { type Item } from './editor';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Gastos({ searchParams }: { searchParams: Promise<{ periodo?: string }> }) {
+  const usuarioId = await idUsuarioActual();
   const { periodo: qp } = await searchParams;
   // La fecha la fija el servidor: si la calculara el cliente, dos telefonos en
   // zonas distintas mostrarian "hace 7 meses" y "hace 8" para el mismo prestamo.
@@ -30,13 +32,18 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   let fiados: PrestamoPersonal[] = [];
 
   async function cargarStatements(p: string) {
-    return db.query.statements.findMany({ where: eq(statements.periodo, p), with: { consumos: true } });
+    return db.query.statements.findMany({
+      where: and(eq(statements.usuarioId, usuarioId), eq(statements.periodo, p)),
+      with: { consumos: true },
+    });
   }
 
   // Los prestamos a personas no dependen del mes: lo que te deben te lo deben
   // hoy, sin importar que cierre estes mirando.
   async function cargarFiados(): Promise<PrestamoPersonal[]> {
-    const filas = await db.query.prestamosPersonales.findMany({ with: { devoluciones: true } });
+    const filas = await db.query.prestamosPersonales.findMany({
+      where: eq(prestamosPersonales.usuarioId, usuarioId), with: { devoluciones: true },
+    });
     return filas.map(f => ({
       id: f.id, persona: f.persona, concepto: f.concepto,
       monto: Number(f.monto), moneda: f.moneda, fecha: f.fecha,
@@ -47,9 +54,11 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
 
   try {
     const ultimoSt = await db.query.statements.findFirst({
+      where: eq(statements.usuarioId, usuarioId),
       orderBy: desc(statements.periodo), columns: { periodo: true },
     });
     const ultimoGasto = await db.select({ periodo: gastos.periodo }).from(gastos)
+      .where(eq(gastos.usuarioId, usuarioId))
       .orderBy(desc(gastos.periodo)).limit(1);
 
     // El mes mas reciente con algo cargado, sea tarjeta o gasto suelto.
@@ -66,7 +75,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
           <h1>Sin gastos cargados</h1>
           <p>Subí un comprobante desde el cierre, o anotá uno acá abajo.</p>
           <GastoTexto />
-          <Prestamos prestamos={await cargarPrestamos()} periodo={mesActual} />
+          <Prestamos prestamos={await cargarPrestamos(usuarioId)} periodo={mesActual} />
           <Fiado prestamos={await cargarFiados()} hoy={hoyISO} />
         </main>
       );
@@ -77,12 +86,12 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
 
     [sts, sueltos, sueldo, prestamos, fiados] = await Promise.all([
       cargarStatements(periodo),
-      db.select().from(gastos).where(eq(gastos.periodo, periodo)),
+      db.select().from(gastos).where(and(eq(gastos.usuarioId, usuarioId), eq(gastos.periodo, periodo))),
       db.query.salaries.findFirst({
-        where: inArray(salaries.periodo, [anterior, periodo]),
+        where: and(eq(salaries.usuarioId, usuarioId), inArray(salaries.periodo, [anterior, periodo])),
         orderBy: desc(salaries.periodo),
       }),
-      cargarPrestamos(),
+      cargarPrestamos(usuarioId),
       cargarFiados(),
     ]);
   } catch (e) {

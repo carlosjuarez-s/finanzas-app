@@ -1,4 +1,4 @@
-import { desc } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { portfolioSnapshots, transacciones } from '@/db/schema';
 import { resultadosPorActivo, discrepancias, ratiosVigentes, clasesDeActivos } from '@/lib/sync-portafolio';
@@ -10,15 +10,18 @@ import FaltaMigracion from '../falta-migracion';
 import AltaTransaccion from './alta-transaccion';
 import Operaciones, { type Operacion } from './operaciones';
 import BarChart from '../bar-chart';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Portafolio() {
+  const usuarioId = await idUsuarioActual();
   let resultados, errores, tenencias, ops: Operacion[] = [];
   let sinPrecio: string[] = [];
   try {
     // Ultimo snapshot de cada plataforma: es lo que el broker dice que tenes.
     const snaps = await db.query.portfolioSnapshots.findMany({
+      where: eq(portfolioSnapshots.usuarioId, usuarioId),
       orderBy: desc(portfolioSnapshots.periodo), with: { positions: true }, limit: 8,
     });
     tenencias = snaps.flatMap(s => s.positions.map(p => ({
@@ -35,13 +38,15 @@ export default async function Portafolio() {
 
     // Cotizaciones en vivo. Si la red falla, cada fuente devuelve vacio y quedan
     // los precios del snapshot: nunca se muestra un cero como si fuera un valor.
-    const [clases, ratios] = await Promise.all([clasesDeActivos(), ratiosVigentes()]);
+    const [clases, ratios] = await Promise.all([clasesDeActivos(usuarioId), ratiosVigentes(usuarioId)]);
     const enVivo = await preciosDePortafolio(clases, ratios);
     Object.assign(precios, enVivo.precios);
     sinPrecio = enVivo.sinPrecio;
 
-    ({ resultados, errores } = await resultadosPorActivo(precios));
-    ops = (await db.select().from(transacciones).orderBy(desc(transacciones.fecha))).map(t => ({
+    ({ resultados, errores } = await resultadosPorActivo(usuarioId, precios));
+    ops = (await db.select().from(transacciones)
+      .where(eq(transacciones.usuarioId, usuarioId))
+      .orderBy(desc(transacciones.fecha))).map(t => ({
       id: t.id, activo: t.activo, tipo: t.tipo, fecha: t.fecha,
       cantidad: Number(t.cantidad), precioUnitario: Number(t.precioUnitario),
       moneda: t.moneda, tipoCambioDia: t.tipoCambioDia === null ? null : Number(t.tipoCambioDia),

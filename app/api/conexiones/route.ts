@@ -3,14 +3,17 @@ import { crearConexion, borrarConexion, listarConexiones } from '@/lib/conexione
 import { esPlataforma, PLATAFORMAS } from '@/lib/plataformas';
 import { bovedaConfigurada } from '@/lib/boveda';
 import { mensajeDeError } from '@/lib/errores';
+import { idUsuarioActual } from '@/lib/usuario';
 
 // El middleware ya exige el Basic Auth de la app en estas rutas.
 
 export async function GET() {
-  return NextResponse.json({ conexiones: await listarConexiones() });
+  const usuarioId = await idUsuarioActual();
+  return NextResponse.json({ conexiones: await listarConexiones(usuarioId) });
 }
 
 export async function POST(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   if (!bovedaConfigurada()) {
     return NextResponse.json(
       { error: 'Falta BOVEDA_CLAVE_1 en el entorno: sin esa clave no se pueden guardar credenciales cifradas.' },
@@ -34,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const conexion = await crearConexion(plataforma, String(body?.etiqueta ?? ''), credencial);
+    const conexion = await crearConexion(usuarioId, plataforma, String(body?.etiqueta ?? ''), credencial);
     // Devuelve el tipo visible, que no incluye el secreto.
     return NextResponse.json({ conexion });
   } catch (e) {
@@ -43,8 +46,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Falta el id.' }, { status: 400 });
-  await borrarConexion(id);
+  await borrarConexion(usuarioId, id);
   return NextResponse.json({ ok: true });
 }

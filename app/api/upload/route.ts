@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, salaries, gastos } from '@/db/schema';
 import { clasificarDocumento, clasificarArchivoTexto, faltaProveedor, MAX_CARACTERES_TEXTO } from '@/lib/extract';
@@ -9,6 +9,7 @@ import { guardarCierres, periodoSiguiente } from '@/lib/cierre';
 import { mensajeDeError } from '@/lib/errores';
 
 import { esArchivoTexto, esArchivoBinario, type ResultadoArchivo } from '@/lib/tipos';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const maxDuration = 300;
 
@@ -16,6 +17,7 @@ export const maxDuration = 300;
 // El middleware exige el mismo Basic Auth que el dashboard (la ruta no empieza
 // con /api/sync), asi que aca no hace falta autenticar de nuevo.
 export async function POST(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const sinProveedor = faltaProveedor();
   if (sinProveedor) return NextResponse.json({ error: sinProveedor }, { status: 400 });
 
@@ -44,10 +46,16 @@ export async function POST(req: NextRequest) {
       // veces el mismo archivo, aunque se llame distinto, no lo duplica.
       const fileId = `upload:${createHash('sha256').update(buf).digest('hex')}`;
 
+      // La deduplicacion es por usuario. Si fuera global, subir un archivo que
+      // otra persona ya subio se saltearia en silencio, y el que sube se
+      // quedaria sin su gasto sin entender por que.
       const [yaSt, yaSal, yaGasto] = await Promise.all([
-        db.select({ fileId: statements.fileId }).from(statements).where(inArray(statements.fileId, [fileId])),
-        db.select({ fileId: salaries.fileId }).from(salaries).where(inArray(salaries.fileId, [fileId])),
-        db.select({ fileId: gastos.fileId }).from(gastos).where(inArray(gastos.fileId, [fileId])),
+        db.select({ fileId: statements.fileId }).from(statements)
+          .where(and(eq(statements.usuarioId, usuarioId), eq(statements.fileId, fileId))),
+        db.select({ fileId: salaries.fileId }).from(salaries)
+          .where(and(eq(salaries.usuarioId, usuarioId), eq(salaries.fileId, fileId))),
+        db.select({ fileId: gastos.fileId }).from(gastos)
+          .where(and(eq(gastos.usuarioId, usuarioId), eq(gastos.fileId, fileId))),
       ]);
       if (yaSt.length || yaSal.length || yaGasto.length) {
         resultados.push({ nombre, estado: 'duplicado', detalle: 'Ya estaba cargado.' });
@@ -78,7 +86,7 @@ export async function POST(req: NextRequest) {
             resultados.push({ nombre, estado: 'desconocido', detalle: `Parece un export de operaciones pero no se pudo leer ninguna fila.${censurado}` });
             continue;
           }
-          const { nuevos, repetidos, descartados } = await guardarMovimientos(movs, 'IMPORTADO');
+          const { nuevos, repetidos, descartados } = await guardarMovimientos(usuarioId, movs, 'IMPORTADO');
           const partes = [`${nuevos} ${nuevos === 1 ? 'operacion nueva' : 'operaciones nuevas'}`];
           if (repetidos) partes.push(`${repetidos} ya estaban`);
           if (descartados) partes.push(`${descartados} sin datos suficientes`);
@@ -87,7 +95,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (resultado.tipo === 'GASTO') {
-          const { periodo, monto } = await guardarGasto(resultado.datos, 'TEXTO', fileId);
+          const { periodo, monto } = await guardarGasto(usuarioId, resultado.datos, 'TEXTO', fileId);
           periodosTocados.add(periodo);
           resultados.push({ nombre, estado: 'cargado', tipo: 'Gasto', detalle: `${resultado.datos.concepto} · ${periodo} · $ ${monto.toLocaleString('es-AR')}${censurado}` });
           continue;
@@ -101,7 +109,7 @@ export async function POST(req: NextRequest) {
 
       switch (doc.tipo) {
         case 'STATEMENT': {
-          const { periodo } = await guardarStatement(fileId, doc.datos);
+          const { periodo } = await guardarStatement(usuarioId, fileId, doc.datos);
           periodosTocados.add(periodo);
           resultados.push({ nombre, estado: 'cargado', tipo: 'Resumen de tarjeta', detalle: `${doc.datos.card} · ${periodo}` });
           break;
@@ -111,7 +119,7 @@ export async function POST(req: NextRequest) {
             resultados.push({ nombre, estado: 'desconocido', detalle: 'Parece un recibo pero no se pudo leer ningun periodo.' });
             break;
           }
-          const { cantidad, periodos } = await guardarSalary(fileId, doc.datos);
+          const { cantidad, periodos } = await guardarSalary(usuarioId, fileId, doc.datos);
           // El sueldo de un mes paga los consumos del siguiente: los dos cierres cambian.
           periodos.forEach(p => { periodosTocados.add(p); periodosTocados.add(periodoSiguiente(p)); });
           resultados.push({ nombre, estado: 'cargado', tipo: 'Recibo de sueldo', detalle: `${cantidad} ${cantidad === 1 ? 'recibo' : 'recibos'} · ${periodos.join(', ')}` });
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
         case 'GASTO': {
           // Una boleta de servicio o un papel fotografiado: es el tipo de
           // documento que el mimetype no distingue, solo el contenido.
-          const { periodo, monto } = await guardarGasto(
+          const { periodo, monto } = await guardarGasto(usuarioId, 
             doc.datos, file.type === 'application/pdf' ? 'BOLETA' : 'FOTO', fileId,
           );
           periodosTocados.add(periodo);
@@ -131,7 +139,7 @@ export async function POST(req: NextRequest) {
           break;
         }
         case 'PORTFOLIO': {
-          const { posiciones } = await guardarPortfolio(periodoPortfolio, doc.datos);
+          const { posiciones } = await guardarPortfolio(usuarioId, periodoPortfolio, doc.datos);
           resultados.push({ nombre, estado: 'cargado', tipo: 'Portfolio', detalle: `${doc.datos.plataforma} · ${posiciones} posiciones` });
           break;
         }
@@ -148,7 +156,7 @@ export async function POST(req: NextRequest) {
   let historico: string | undefined;
   if (periodosTocados.size) {
     try {
-      await guardarCierres([...periodosTocados]);
+      await guardarCierres(usuarioId, [...periodosTocados]);
     } catch (e) {
       historico = `Los datos se guardaron, pero fallo el recalculo del historico. ${mensajeDeError(e)}`;
     }

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { guardarSupuestos } from '@/lib/supuestos';
 import type { Supuestos } from '@/lib/proyeccion';
+import { idUsuarioActual } from '@/lib/usuario';
 
 const CAMPOS: (keyof Supuestos)[] = [
   'tipoCambioArs', 'retornoRealPesos', 'retornoRealDolares', 'retornoRealIndice',
 ];
 
 export async function POST(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const body = await req.json().catch(() => null);
   const parcial: Partial<Supuestos> = {};
 
@@ -23,5 +25,5 @@ export async function POST(req: NextRequest) {
     parcial[campo] = valor;
   }
 
-  return NextResponse.json({ supuestos: await guardarSupuestos(parcial) });
+  return NextResponse.json({ supuestos: await guardarSupuestos(usuarioId, parcial) });
 }

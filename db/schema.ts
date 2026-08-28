@@ -1,10 +1,28 @@
-import { pgTable, text, timestamp, numeric, jsonb, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, numeric, jsonb, boolean, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createId } from './id';
 
+// Quien es dueño de cada dato.
+//
+// Hoy entra una sola persona, pero el dueño se guarda igual desde el principio:
+// agregar la columna despues, con datos adentro, obliga a adivinar de quien era
+// cada fila. El email es la llave contra la sesion de Google.
+export const usuarios = pgTable('usuarios', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  email: text('email').notNull().unique(),
+  nombre: text('nombre'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Toda tabla con dueño lleva esta columna. Las hijas (consumos, positions,
+// devoluciones) NO la llevan: se scopean por su padre, asi no puede quedar una
+// fila hija apuntando a un usuario distinto que el de su padre.
+const duenio = () => text('usuario_id').notNull().references(() => usuarios.id, { onDelete: 'cascade' });
+
 export const statements = pgTable('statements', {
   id: text('id').primaryKey().$defaultFn(createId),
-  fileId: text('file_id').notNull().unique(), // id del PDF en Drive, evita reprocesar
+  usuarioId: duenio(),
+  fileId: text('file_id').notNull(),          // id del PDF en Drive, evita reprocesar
   card: text('card').notNull(),               // MASTER | VISA | otra
   periodo: text('periodo').notNull(),         // YYYY-MM (mes de vencimiento)
   vencimiento: timestamp('vencimiento'),
@@ -13,7 +31,9 @@ export const statements = pgTable('statements', {
   percepArs: numeric('percep_ars', { precision: 14, scale: 2 }).notNull(), // RG 4815/5617
   raw: jsonb('raw').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+  // Unico por usuario y no global: dos personas pueden tener el mismo archivo,
+  // y con un unique global el segundo en subirlo se comeria un error ajeno.
+}, t => [uniqueIndex('statement_usuario_file').on(t.usuarioId, t.fileId)]);
 
 export const consumos = pgTable('consumos', {
   id: text('id').primaryKey().$defaultFn(createId),
@@ -30,21 +50,23 @@ export const consumos = pgTable('consumos', {
 
 export const salaries = pgTable('salaries', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   fileId: text('file_id').notNull(),
-  periodo: text('periodo').notNull().unique(),
+  periodo: text('periodo').notNull(),
   netoArs: numeric('neto_ars', { precision: 14, scale: 2 }).notNull(),
   corregido: boolean('corregido').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, t => [uniqueIndex('salary_usuario_periodo').on(t.usuarioId, t.periodo)]);
 
 export const portfolioSnapshots = pgTable('portfolio_snapshots', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   periodo: text('periodo').notNull(),
   plataforma: text('plataforma').notNull(),
   totalUsd: numeric('total_usd', { precision: 14, scale: 2 }),
   totalArs: numeric('total_ars', { precision: 16, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, t => [uniqueIndex('snapshot_periodo_plataforma').on(t.periodo, t.plataforma)]);
+}, t => [uniqueIndex('snapshot_periodo_plataforma').on(t.usuarioId, t.periodo, t.plataforma)]);
 
 export const positions = pgTable('positions', {
   id: text('id').primaryKey().$defaultFn(createId),
@@ -62,7 +84,8 @@ export const positions = pgTable('positions', {
 // los consumos de todos los meses cada vez que se lo consulta.
 export const monthlyCloses = pgTable('monthly_closes', {
   id: text('id').primaryKey().$defaultFn(createId),
-  periodo: text('periodo').notNull().unique(),
+  usuarioId: duenio(),
+  periodo: text('periodo').notNull(),
   ingresoArs: numeric('ingreso_ars', { precision: 14, scale: 2 }).notNull(),
   gastoArs: numeric('gasto_ars', { precision: 14, scale: 2 }).notNull(),
   gastoUsd: numeric('gasto_usd', { precision: 10, scale: 2 }).notNull(),
@@ -72,7 +95,7 @@ export const monthlyCloses = pgTable('monthly_closes', {
   tasaAhorro: numeric('tasa_ahorro', { precision: 6, scale: 2 }),
   porCategoria: jsonb('por_categoria').notNull(),
   calculadoAt: timestamp('calculado_at').defaultNow().notNull(),
-});
+}, t => [uniqueIndex('cierre_usuario_periodo').on(t.usuarioId, t.periodo)]);
 
 // Gastos que no vienen de un resumen de tarjeta: boletas de servicios, el
 // alquiler (que muchas veces es un papel sin version digital) y lo que se carga
@@ -80,8 +103,9 @@ export const monthlyCloses = pgTable('monthly_closes', {
 // statement, pero suman al mismo cierre mensual.
 export const gastos = pgTable('gastos', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   // Hash del archivo si vino de uno; null si se cargo por texto.
-  fileId: text('file_id').unique(),
+  fileId: text('file_id'),
   periodo: text('periodo').notNull(),          // YYYY-MM al que imputa
   fecha: text('fecha'),                        // YYYY-MM-DD si el comprobante la trae
   concepto: text('concepto').notNull(),        // "Luz - EDET", "Alquiler septiembre"
@@ -95,7 +119,7 @@ export const gastos = pgTable('gastos', {
   notas: text('notas'),
   raw: jsonb('raw'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, t => [uniqueIndex('gasto_usuario_file').on(t.usuarioId, t.fileId)]);
 
 // Prestamos y creditos. No son un gasto: son un compromiso con cronograma.
 //
@@ -108,6 +132,7 @@ export const gastos = pgTable('gastos', {
 // hay que cargarla ademas como gasto suelto: se contaria dos veces.
 export const prestamos = pgTable('prestamos', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   nombre: text('nombre').notNull(),                // "Prestamo personal Galicia"
   entidad: text('entidad'),                        // banco o financiera
   // Lo que te prestaron. Es informativo: el gasto mensual sale de la cuota, y
@@ -130,6 +155,7 @@ export const prestamos = pgTable('prestamos', {
 // sin ajuste, asi que el default es USD y el progreso se mide en USD reales.
 export const goals = pgTable('goals', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   nombre: text('nombre').notNull(),
   montoObjetivo: numeric('monto_objetivo', { precision: 14, scale: 2 }).notNull(),
   moneda: text('moneda').notNull().default('USD'),  // ARS | USD
@@ -147,6 +173,7 @@ export const goals = pgTable('goals', {
 // retroactivamente. Guardar solo el promedio es una puerta que se cierra.
 export const transacciones = pgTable('transacciones', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   activo: text('activo').notNull(),                // BTC, AAPL, AL30
   clase: text('clase').notNull(),                  // CRIPTO | CEDEAR | RENTA_FIJA | FCI | DOLAR
   tipo: text('tipo').notNull(),                    // COMPRA | VENTA
@@ -160,9 +187,11 @@ export const transacciones = pgTable('transacciones', {
   comision: numeric('comision', { precision: 20, scale: 8 }).notNull().default('0'),
   origen: text('origen').notNull(),                // MANUAL | BINANCE | IOL | FOTO
   // Id de la operacion en la plataforma: evita duplicar al reimportar.
-  refExterna: text('ref_externa').unique(),
+  refExterna: text('ref_externa'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+  // Por usuario: dos personas pueden importar el mismo trade de Binance si
+  // comparten una cuenta, y ninguna tiene que pisar a la otra.
+}, t => [uniqueIndex('transaccion_usuario_ref').on(t.usuarioId, t.refExterna)]);
 
 // Eventos del activo, no operaciones tuyas: cambios de ratio de CEDEAR, splits,
 // dividendos en acciones.
@@ -174,6 +203,7 @@ export const transacciones = pgTable('transacciones', {
 // nunca ocurrio.
 export const eventosActivo = pgTable('eventos_activo', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   activo: text('activo').notNull(),
   fecha: text('fecha').notNull(),                  // YYYY-MM-DD
   tipo: text('tipo').notNull(),                    // RATIO | SPLIT | DIVIDENDO_ACCIONES
@@ -194,6 +224,7 @@ export const eventosActivo = pgTable('eventos_activo', {
 // en una fila y mentirle a la UI.
 export const conexiones = pgTable('conexiones', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   plataforma: text('plataforma').notNull(),        // BINANCE | IOL
   etiqueta: text('etiqueta').notNull(),            // "Binance principal"
   secreto: jsonb('secreto').notNull(),             // { v, iv, tag, datos }
@@ -209,10 +240,13 @@ export const conexiones = pgTable('conexiones', {
 // Clave-valor para los supuestos de proyeccion (retornos, tipo de cambio) y lo
 // que se quiera hacer configurable despues, sin una migracion por cada opcion.
 export const settings = pgTable('settings', {
-  clave: text('clave').primaryKey(),
+  usuarioId: duenio(),
+  clave: text('clave').notNull(),
   valor: jsonb('valor').notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+  // La clave sola no alcanza como primaria: dos personas tienen cada una su
+  // "tipoCambioArs" y no se pueden pisar.
+}, t => [primaryKey({ columns: [t.usuarioId, t.clave] })]);
 
 // Plata que le prestaste a alguien y te tiene que devolver.
 //
@@ -226,6 +260,7 @@ export const settings = pgTable('settings', {
 // campo "devuelto" que hay que acordarse de actualizar.
 export const prestamosPersonales = pgTable('prestamos_personales', {
   id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
   persona: text('persona').notNull(),              // a quien le prestaste
   concepto: text('concepto'),                      // "para el alquiler", "arreglo del auto"
   monto: numeric('monto', { precision: 14, scale: 2 }).notNull(),

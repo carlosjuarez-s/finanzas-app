@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { monthlyCloses } from '@/db/schema';
 import { leerSupuestos, ahorroAcumuladoUsd } from '@/lib/supuestos';
@@ -8,17 +8,20 @@ import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import Simulador from './simulador';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Proyeccion() {
+  const usuarioId = await idUsuarioActual();
   let supuestos, cierres, acumuladoUsd;
   try {
     [supuestos, cierres] = await Promise.all([
-      leerSupuestos(),
-      db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
+      leerSupuestos(usuarioId),
+      db.select().from(monthlyCloses).where(eq(monthlyCloses.usuarioId, usuarioId))
+        .orderBy(asc(monthlyCloses.periodo)),
     ]);
-    acumuladoUsd = await ahorroAcumuladoUsd(supuestos.tipoCambioArs);
+    acumuladoUsd = await ahorroAcumuladoUsd(usuarioId, supuestos.tipoCambioArs);
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;

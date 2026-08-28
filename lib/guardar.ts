@@ -39,12 +39,13 @@ function fecha(v: unknown): Date | null {
 export const periodoValido = (v: unknown): v is string =>
   typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 
-export async function guardarStatement(fileId: string, data: StatementData) {
+export async function guardarStatement(usuarioId: string, fileId: string, data: StatementData) {
   if (!periodoValido(data.periodo)) {
     throw new Error(`El periodo extraido no tiene formato YYYY-MM (vino "${data.periodo}").`);
   }
 
   const [st] = await db.insert(statements).values({
+    usuarioId,
     fileId,
     card: texto(data.card, 'DESCONOCIDA'),
     periodo: data.periodo,
@@ -73,7 +74,7 @@ export async function guardarStatement(fileId: string, data: StatementData) {
 }
 
 // Devuelve cuantos recibos entraron: un PDF puede traer varios meses.
-export async function guardarSalary(fileId: string, data: SalaryData) {
+export async function guardarSalary(usuarioId: string, fileId: string, data: SalaryData) {
   // Un recibo sin periodo valido no se puede asociar a ningun mes: mejor
   // descartarlo que inventar una fila que despues no cuadra con nada.
   const recibos = (Array.isArray(data.recibos) ? data.recibos : [])
@@ -81,9 +82,9 @@ export async function guardarSalary(fileId: string, data: SalaryData) {
 
   for (const r of recibos) {
     await db.insert(salaries)
-      .values({ periodo: r.periodo, netoArs: String(num(r.netoArs)), fileId })
+      .values({ usuarioId, periodo: r.periodo, netoArs: String(num(r.netoArs)), fileId })
       .onConflictDoUpdate({
-        target: salaries.periodo,
+        target: [salaries.usuarioId, salaries.periodo],
         set: { netoArs: String(num(r.netoArs)), fileId },
       });
   }
@@ -109,7 +110,7 @@ const categoriaValida = (v: unknown): string => {
  * id y es preferible a duplicar todo el historial. Con ref eso no pasa: son dos
  * operaciones distintas y se guardan las dos.
  */
-export async function guardarMovimientos(movs: (MovimientoData & { ref?: string })[], origen: string) {
+export async function guardarMovimientos(usuarioId: string, movs: (MovimientoData & { ref?: string })[], origen: string) {
   let nuevos = 0, repetidos = 0, descartados = 0;
 
   for (const m of movs) {
@@ -125,6 +126,7 @@ export async function guardarMovimientos(movs: (MovimientoData & { ref?: string 
       .digest('hex').slice(0, 32);
 
     const [fila] = await db.insert(transacciones).values({
+      usuarioId,
       activo,
       clase: texto(m?.clase, 'CRIPTO').toUpperCase(),
       tipo: m?.tipo === 'VENTA' ? 'VENTA' : 'COMPRA',
@@ -139,7 +141,7 @@ export async function guardarMovimientos(movs: (MovimientoData & { ref?: string 
       origen,
       refExterna: huella,
     })
-      .onConflictDoNothing({ target: transacciones.refExterna })
+      .onConflictDoNothing({ target: [transacciones.usuarioId, transacciones.refExterna] })
       .returning({ id: transacciones.id });
 
     if (fila) nuevos++; else repetidos++;
@@ -150,7 +152,7 @@ export async function guardarMovimientos(movs: (MovimientoData & { ref?: string 
 export type OrigenGasto = 'BOLETA' | 'FOTO' | 'TEXTO' | 'MANUAL';
 
 export async function guardarGasto(
-  data: GastoData, origen: OrigenGasto, fileId: string | null = null,
+  usuarioId: string, data: GastoData, origen: OrigenGasto, fileId: string | null = null,
 ) {
   if (!periodoValido(data.periodo)) {
     throw new Error(`El periodo del gasto no tiene formato YYYY-MM (vino "${data.periodo}").`);
@@ -161,6 +163,7 @@ export async function guardarGasto(
   }
 
   const [g] = await db.insert(gastos).values({
+    usuarioId,
     fileId,
     periodo: data.periodo,
     fecha: typeof data.fecha === 'string' && data.fecha.trim() ? data.fecha.trim() : null,
@@ -175,17 +178,17 @@ export async function guardarGasto(
   return { id: g.id, periodo: data.periodo, monto };
 }
 
-export async function guardarPortfolio(periodo: string, data: PortfolioData) {
+export async function guardarPortfolio(usuarioId: string, periodo: string, data: PortfolioData) {
   // null y 0 no son lo mismo: "no muestra valuacion" no es "vale cero".
   const monto = (v: unknown) => (v == null ? null : String(num(v)));
 
   const [snap] = await db.insert(portfolioSnapshots)
     .values({
-      periodo, plataforma: texto(data.plataforma, 'Sin identificar'),
+      usuarioId, periodo, plataforma: texto(data.plataforma, 'Sin identificar'),
       totalUsd: monto(data.totalUsd), totalArs: monto(data.totalArs),
     })
     .onConflictDoUpdate({
-      target: [portfolioSnapshots.periodo, portfolioSnapshots.plataforma],
+      target: [portfolioSnapshots.usuarioId, portfolioSnapshots.periodo, portfolioSnapshots.plataforma],
       set: { totalUsd: monto(data.totalUsd), totalArs: monto(data.totalArs) },
     })
     .returning({ id: portfolioSnapshots.id });

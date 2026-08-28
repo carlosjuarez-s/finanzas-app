@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { goals, monthlyCloses } from '@/db/schema';
 import { leerSupuestos, ahorroAcumuladoUsd } from '@/lib/supuestos';
@@ -9,20 +9,23 @@ import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import MetaForm from './meta-form';
 import BorrarMeta from './borrar-meta';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
 
 const HORIZONTE_MESES = 360; // 30 años: mas alla, la estimacion no dice nada
 
 export default async function Metas() {
+  const usuarioId = await idUsuarioActual();
   let metas, supuestos, cierres, acumuladoUsd;
   try {
     [metas, supuestos, cierres] = await Promise.all([
-      db.select().from(goals).orderBy(asc(goals.createdAt)),
-      leerSupuestos(),
-      db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
+      db.select().from(goals).where(eq(goals.usuarioId, usuarioId)).orderBy(asc(goals.createdAt)),
+      leerSupuestos(usuarioId),
+      db.select().from(monthlyCloses).where(eq(monthlyCloses.usuarioId, usuarioId))
+        .orderBy(asc(monthlyCloses.periodo)),
     ]);
-    acumuladoUsd = await ahorroAcumuladoUsd(supuestos.tipoCambioArs);
+    acumuladoUsd = await ahorroAcumuladoUsd(usuarioId, supuestos.tipoCambioArs);
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;

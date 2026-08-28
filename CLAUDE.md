@@ -153,6 +153,37 @@ Y los simbolos se descomponen con `exchangeInfo`, no partiendo el string:
 "ETHBTC" se puede leer ETH/BTC o ETHB/TC, y adivinar por prefijos falla con los
 activos nuevos.
 
+## De quien es cada dato
+
+Doce tablas tienen dueño (`usuario_id`). Las hijas —`consumos`, `positions`,
+`devoluciones`— **no** lo llevan a proposito: se scopean por su padre. Una copia
+del dueño en la hija puede desincronizarse y terminar apuntando a otra persona;
+el padre no puede.
+
+Tres capas para que no se pueda olvidar, y ninguna alcanza sola:
+
+1. **El tipo**, para las escrituras. `usuarioId` es `notNull`, asi que un insert
+   que se lo olvide **no compila**.
+2. **`lib/scoping.test.ts`**, para las lecturas — que compilan igual sin filtro y
+   son justo las que muestran datos de otra persona. Lee el codigo fuente y
+   falla si una tabla con dueño se consulta sin nombrar `usuarioId`. Ya encontro
+   dos fugas que se me habian pasado.
+3. **La firma de cada funcion**: `usuarioId` va primero, siempre. Una funcion que
+   recibe solo un `id` invita a usarla sin autorizar.
+
+Un `id` **nunca** alcanza como autorizacion. `leerCredencial`, `borrarConexion` y
+todo update por id filtran ademas por dueño: sin eso, conocer o adivinar el id de
+otra persona bastaria para leerle la credencial de Binance.
+
+Para saltear el chequeo hay que escribir `scoping-ok:` con el motivo, en la
+consulta misma. Hoy hay **una sola**: `rotarCifrado()`, porque la clave de la
+boveda es de la instalacion y rotarla tiene que alcanzar a todas las conexiones.
+
+El cron de Drive corre sin sesion, con `idUsuarioDeLaInstalacion()`. No es un
+atajo: las carpetas se configuran con variables de entorno globales, asi que esa
+integracion es de una sola persona. Cuando las carpetas sean por usuario, el
+cron itera y esa funcion desaparece.
+
 ## Quien entra a la app
 
 Dos puertas, nunca las dos a la vez: si `AUTH_GOOGLE_ID` y `AUTH_GOOGLE_SECRET`

@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { monthlyCloses } from '@/db/schema';
 import { fmtArs, fmtPct, fmtPeriodo } from '@/lib/formato';
@@ -7,13 +7,17 @@ import LineChart from '../line-chart';
 import BarChart from '../bar-chart';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Historico() {
+  const usuarioId = await idUsuarioActual();
   let cierres;
   try {
-    cierres = await db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo));
+    cierres = await db.select().from(monthlyCloses)
+      .where(eq(monthlyCloses.usuarioId, usuarioId))
+      .orderBy(asc(monthlyCloses.periodo));
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;   // otro error de base: que se vea, no que se disfrace

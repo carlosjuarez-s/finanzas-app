@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { goals } from '@/db/schema';
+import { idUsuarioActual } from '@/lib/usuario';
 
 // El middleware ya exige Basic Auth en estas rutas.
 
 export async function POST(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const body = await req.json().catch(() => null);
   const nombre = String(body?.nombre ?? '').trim();
   const monto = Number(body?.montoObjetivo);
@@ -22,6 +24,7 @@ export async function POST(req: NextRequest) {
     ? body.fechaObjetivo : null;
 
   const [meta] = await db.insert(goals).values({
+      usuarioId,
     nombre, montoObjetivo: String(monto), moneda, fechaObjetivo: fecha,
     notas: typeof body?.notas === 'string' && body.notas.trim() ? body.notas.trim() : null,
   }).returning();
@@ -30,8 +33,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Falta el id.' }, { status: 400 });
-  await db.delete(goals).where(eq(goals.id, id));
+  await db.delete(goals).where(and(eq(goals.usuarioId, usuarioId), eq(goals.id, id)));
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { analizar } from '@/lib/analisis';
 import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,9 +13,10 @@ const COLOR: Record<string, string> = {
 };
 
 export default async function Analisis() {
+  const usuarioId = await idUsuarioActual();
   let hallazgos, analisis, motivo;
   try {
-    ({ hallazgos, analisis, motivo } = await analizar());
+    ({ hallazgos, analisis, motivo } = await analizar(usuarioId));
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;

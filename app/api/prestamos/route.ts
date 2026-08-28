@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { prestamos } from '@/db/schema';
 import { guardarCierres } from '@/lib/cierre';
 import { PERIODO } from '@/lib/prestamos';
 import { mensajeDeError } from '@/lib/errores';
+import { idUsuarioActual } from '@/lib/usuario';
 
 const numero = (v: unknown, min = 0): number | null => {
   const n = Number(v);
@@ -51,15 +52,16 @@ function leer(b: Record<string, unknown> | null) {
 }
 
 export async function POST(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const b = await req.json().catch(() => null);
   const { error, valores } = leer(b);
   if (error) return NextResponse.json({ error }, { status: 400 });
 
   try {
-    const [fila] = await db.insert(prestamos).values(valores!).returning({ id: prestamos.id });
+    const [fila] = await db.insert(prestamos).values({ ...valores!, usuarioId }).returning({ id: prestamos.id });
     // El cierre de cada mes con cuota cambia: hay que recalcularlo ya, o el
     // historico sigue mostrando el gasto de antes.
-    await guardarCierres();
+    await guardarCierres(usuarioId);
     return NextResponse.json({ id: fila.id });
   } catch (e) {
     return NextResponse.json({ error: mensajeDeError(e) }, { status: 500 });
@@ -67,6 +69,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const b = await req.json().catch(() => null);
   if (!b?.id) return NextResponse.json({ error: 'Falta el id.' }, { status: 400 });
 
@@ -75,11 +78,11 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const [fila] = await db.update(prestamos).set(valores!)
-      .where(eq(prestamos.id, String(b.id)))
+      .where(and(eq(prestamos.usuarioId, usuarioId), eq(prestamos.id, String(b.id))))
       .returning({ id: prestamos.id });
 
     if (!fila) return NextResponse.json({ error: 'No se encontró ese préstamo.' }, { status: 404 });
-    await guardarCierres();
+    await guardarCierres(usuarioId);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: mensajeDeError(e) }, { status: 500 });
@@ -87,12 +90,13 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const id = new URL(req.url).searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Falta el id.' }, { status: 400 });
 
   try {
-    await db.delete(prestamos).where(eq(prestamos.id, id));
-    await guardarCierres();
+    await db.delete(prestamos).where(and(eq(prestamos.usuarioId, usuarioId), eq(prestamos.id, id)));
+    await guardarCierres(usuarioId);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: mensajeDeError(e) }, { status: 500 });

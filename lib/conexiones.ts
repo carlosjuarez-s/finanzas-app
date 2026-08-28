@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { conexiones } from '@/db/schema';
 import { createId } from '@/db/id';
@@ -25,7 +25,7 @@ export type ConexionVisible = {
 
 const CONTEXTO = (id: string) => `conexion:${id}`;
 
-export async function listarConexiones(): Promise<ConexionVisible[]> {
+export async function listarConexiones(usuarioId: string): Promise<ConexionVisible[]> {
   // Se seleccionan las columnas de a una a proposito: un select() completo
   // arrastraria el secreto cifrado a cualquier lugar que muestre esta lista.
   const filas = await db.select({
@@ -37,7 +37,7 @@ export async function listarConexiones(): Promise<ConexionVisible[]> {
     ultimoSync: conexiones.ultimoSync,
     ultimoError: conexiones.ultimoError,
     createdAt: conexiones.createdAt,
-  }).from(conexiones);
+  }).from(conexiones).where(eq(conexiones.usuarioId, usuarioId));
 
   return filas.map(f => {
     const p = PLATAFORMAS[f.plataforma as PlataformaId];
@@ -51,7 +51,7 @@ export async function listarConexiones(): Promise<ConexionVisible[]> {
 }
 
 export async function crearConexion(
-  plataforma: PlataformaId, etiqueta: string, credencial: Record<string, string>,
+  usuarioId: string, plataforma: PlataformaId, etiqueta: string, credencial: Record<string, string>,
 ): Promise<ConexionVisible> {
   const def = PLATAFORMAS[plataforma];
   if (!def) throw new Error(`Plataforma desconocida: ${plataforma}`);
@@ -67,6 +67,7 @@ export async function crearConexion(
   const id = createId();
   const [fila] = await db.insert(conexiones).values({
     id,
+    usuarioId,
     plataforma,
     etiqueta: etiqueta.trim() || def.nombre,
     secreto: cifrar(credencial, CONTEXTO(id)),
@@ -91,29 +92,34 @@ export async function crearConexion(
 /**
  * Descifra la credencial. Solo debe llamarse desde el codigo que hace el pedido
  * a la plataforma, y el resultado nunca debe salir en una respuesta HTTP.
+ *
+ * El id solo no autoriza: siempre va acompañado del dueño. Sin eso, conocer o
+ * adivinar un id de otra persona alcanzaria para leerle la credencial.
  */
-export async function leerCredencial<T = Record<string, string>>(id: string): Promise<T> {
+export async function leerCredencial<T = Record<string, string>>(usuarioId: string, id: string): Promise<T> {
   const [fila] = await db.select({ secreto: conexiones.secreto })
-    .from(conexiones).where(eq(conexiones.id, id));
+    .from(conexiones)
+    .where(and(eq(conexiones.usuarioId, usuarioId), eq(conexiones.id, id)));
   if (!fila) throw new Error('No se encontro esa conexion.');
   return descifrar<T>(fila.secreto as Cifrado, CONTEXTO(id));
 }
 
-export async function borrarConexion(id: string): Promise<void> {
-  await db.delete(conexiones).where(eq(conexiones.id, id));
+export async function borrarConexion(usuarioId: string, id: string): Promise<void> {
+  await db.delete(conexiones)
+    .where(and(eq(conexiones.usuarioId, usuarioId), eq(conexiones.id, id)));
 }
 
 /** Registra un fallo, censurando la credencial si vino en el texto del error. */
-export async function marcarError(id: string, e: unknown, secretos: string[] = []): Promise<void> {
+export async function marcarError(usuarioId: string, id: string, e: unknown, secretos: string[] = []): Promise<void> {
   await db.update(conexiones)
     .set({ estado: 'ERROR', ultimoError: errorCensurado(e, secretos).slice(0, 500) })
-    .where(eq(conexiones.id, id));
+    .where(and(eq(conexiones.usuarioId, usuarioId), eq(conexiones.id, id)));
 }
 
-export async function marcarSync(id: string): Promise<void> {
+export async function marcarSync(usuarioId: string, id: string): Promise<void> {
   await db.update(conexiones)
     .set({ estado: 'ACTIVA', ultimoSync: new Date(), ultimoError: null })
-    .where(eq(conexiones.id, id));
+    .where(and(eq(conexiones.usuarioId, usuarioId), eq(conexiones.id, id)));
 }
 
 /**
@@ -122,6 +128,10 @@ export async function marcarSync(id: string): Promise<void> {
  * termine, las viejas se siguen leyendo con su clave original.
  */
 export async function rotarCifrado(): Promise<{ migradas: number; total: number }> {
+  // scoping-ok: la clave de la boveda es de la instalacion, no de una persona.
+  // Rotarla tiene que alcanzar a todas las conexiones o quedarian filas que ya
+  // no se pueden descifrar. Es la unica consulta del proyecto que cruza
+  // usuarios a proposito, y no devuelve nada legible: solo recifra en el lugar.
   const filas = await db.select({ id: conexiones.id, secreto: conexiones.secreto }).from(conexiones);
   const actual = versionActual();
   let migradas = 0;

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { transacciones, eventosActivo } from '@/db/schema';
 import { mensajeDeError } from '@/lib/errores';
+import { idUsuarioActual } from '@/lib/usuario';
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -12,6 +13,7 @@ const numero = (v: unknown, min = 0): number | null => {
 };
 
 export async function POST(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const b = await req.json().catch(() => null);
 
   // Un evento de activo (cambio de ratio, split) no es una operacion tuya:
@@ -22,6 +24,7 @@ export async function POST(req: NextRequest) {
     if (!FECHA.test(String(b.fecha))) return NextResponse.json({ error: 'La fecha tiene que ser YYYY-MM-DD.' }, { status: 400 });
 
     const [fila] = await db.insert(eventosActivo).values({
+      usuarioId,
       activo: String(b.activo ?? '').trim().toUpperCase(),
       fecha: b.fecha,
       tipo: b.tipo === 'SPLIT' || b.tipo === 'DIVIDENDO_ACCIONES' ? b.tipo : 'RATIO',
@@ -53,6 +56,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const [fila] = await db.insert(transacciones).values({
+      usuarioId,
       activo,
       clase: String(b?.clase ?? 'CRIPTO'),
       tipo: b?.tipo === 'VENTA' ? 'VENTA' : 'COMPRA',
@@ -75,6 +79,7 @@ export async function POST(req: NextRequest) {
  * completar el tipo de cambio que el export del broker no trae.
  */
 export async function PATCH(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const b = await req.json().catch(() => null);
   if (!b?.id) return NextResponse.json({ error: 'Falta el id.' }, { status: 400 });
 
@@ -110,7 +115,7 @@ export async function PATCH(req: NextRequest) {
         // toca.
         origen: 'MANUAL',
       })
-      .where(eq(transacciones.id, String(b.id)))
+      .where(and(eq(transacciones.usuarioId, usuarioId), eq(transacciones.id, String(b.id))))
       .returning({ id: transacciones.id });
 
     if (!fila) return NextResponse.json({ error: 'No se encontro esa operacion.' }, { status: 404 });
@@ -121,13 +126,14 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const url = new URL(req.url);
   const id = url.searchParams.get('id');
   const entidad = url.searchParams.get('entidad');
   if (!id) return NextResponse.json({ error: 'Falta el id.' }, { status: 400 });
 
-  if (entidad === 'evento') await db.delete(eventosActivo).where(eq(eventosActivo.id, id));
-  else await db.delete(transacciones).where(eq(transacciones.id, id));
+  if (entidad === 'evento') await db.delete(eventosActivo).where(and(eq(eventosActivo.usuarioId, usuarioId), eq(eventosActivo.id, id)));
+  else await db.delete(transacciones).where(and(eq(transacciones.usuarioId, usuarioId), eq(transacciones.id, id)));
 
   return NextResponse.json({ ok: true });
 }

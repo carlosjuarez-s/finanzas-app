@@ -1,4 +1,4 @@
-import { asc, desc } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { monthlyCloses, gastos, goals, transacciones, portfolioSnapshots, prestamosPersonales } from '@/db/schema';
 import { auditar, type Hallazgo, type DatosAuditoria } from './auditoria';
@@ -31,16 +31,19 @@ export type Analisis = {
   observaciones: string[];
 };
 
-export async function reunirDatos(): Promise<DatosAuditoria> {
+export async function reunirDatos(usuarioId: string): Promise<DatosAuditoria> {
   const hoyISO = new Date().toISOString().slice(0, 10);
 
   const [cierres, sueltos, metas, supuestos, conexiones, filasFiado] = await Promise.all([
-    db.select().from(monthlyCloses).orderBy(asc(monthlyCloses.periodo)),
-    db.select().from(gastos),
-    db.select().from(goals),
-    leerSupuestos(),
-    listarConexiones(),
-    db.query.prestamosPersonales.findMany({ with: { devoluciones: true } }),
+    db.select().from(monthlyCloses).where(eq(monthlyCloses.usuarioId, usuarioId))
+      .orderBy(asc(monthlyCloses.periodo)),
+    db.select().from(gastos).where(eq(gastos.usuarioId, usuarioId)),
+    db.select().from(goals).where(eq(goals.usuarioId, usuarioId)),
+    leerSupuestos(usuarioId),
+    listarConexiones(usuarioId),
+    db.query.prestamosPersonales.findMany({
+      where: eq(prestamosPersonales.usuarioId, usuarioId), with: { devoluciones: true },
+    }),
   ]);
 
   const fiados: PrestamoPersonal[] = filasFiado.map(f => ({
@@ -50,9 +53,11 @@ export async function reunirDatos(): Promise<DatosAuditoria> {
   }));
 
   const snaps = await db.query.portfolioSnapshots.findMany({
+    where: eq(portfolioSnapshots.usuarioId, usuarioId),
     orderBy: desc(portfolioSnapshots.periodo), with: { positions: true }, limit: 4,
   });
-  const activosConLibro = (await db.selectDistinct({ activo: transacciones.activo }).from(transacciones))
+  const activosConLibro = (await db.selectDistinct({ activo: transacciones.activo })
+    .from(transacciones).where(eq(transacciones.usuarioId, usuarioId)))
     .map(r => r.activo);
 
   return {
@@ -81,7 +86,7 @@ export async function reunirDatos(): Promise<DatosAuditoria> {
         diasDesde: r.diasDesde, huboDevolucion: r.devuelto > 0,
       };
     }),
-    ahorroAcumuladoUsd: await ahorroAcumuladoUsd(supuestos.tipoCambioArs),
+    ahorroAcumuladoUsd: await ahorroAcumuladoUsd(usuarioId, supuestos.tipoCambioArs),
     tipoCambioArs: supuestos.tipoCambioArs,
     hoy: new Date().toISOString().slice(0, 7),
   };
@@ -113,8 +118,8 @@ function paraElModelo(d: DatosAuditoria, hallazgos: Hallazgo[]) {
   });
 }
 
-export async function analizar(): Promise<{ hallazgos: Hallazgo[]; analisis: Analisis | null; motivo?: string }> {
-  const datos = await reunirDatos();
+export async function analizar(usuarioId: string): Promise<{ hallazgos: Hallazgo[]; analisis: Analisis | null; motivo?: string }> {
+  const datos = await reunirDatos(usuarioId);
   const hallazgos = auditar(datos);
 
   // Los hallazgos ya valen por si solos: si no hay proveedor de IA configurado,

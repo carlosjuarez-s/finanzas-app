@@ -3,6 +3,7 @@ import { interpretarTexto, faltaProveedor } from '@/lib/extract';
 import { guardarGasto } from '@/lib/guardar';
 import { guardarCierres } from '@/lib/cierre';
 import { mensajeDeError } from '@/lib/errores';
+import { idUsuarioActual } from '@/lib/usuario';
 
 export const maxDuration = 120;
 
@@ -10,6 +11,7 @@ export const maxDuration = 120;
 // A diferencia de una foto, aca la redaccion de PII protege de verdad, porque el
 // texto se limpia antes de salir hacia el proveedor.
 export async function POST(req: NextRequest) {
+  const usuarioId = await idUsuarioActual();
   const sinProveedor = faltaProveedor();
   if (sinProveedor) return NextResponse.json({ error: sinProveedor }, { status: 400 });
 
@@ -34,9 +36,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { periodo, monto } = await guardarGasto(resultado.datos, 'TEXTO');
+    const { periodo, monto } = await guardarGasto(usuarioId, resultado.datos, 'TEXTO');
     try {
-      await guardarCierres([periodo]);
+      await guardarCierres(usuarioId, [periodo]);
     } catch (e) {
       return NextResponse.json({
         estado: 'cargado', gasto: resultado.datos, hallazgos,

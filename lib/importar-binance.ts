@@ -29,10 +29,10 @@ export type ResultadoImportacion = {
 // deja mucho margen y evita que una cuenta con muchos activos se quede colgada.
 const MAX_PARES = 60;
 
-export async function importarHistorial(): Promise<ResultadoImportacion[]> {
+export async function importarHistorial(usuarioId: string): Promise<ResultadoImportacion[]> {
   const salida: ResultadoImportacion[] = [];
 
-  for (const c of await listarConexiones()) {
+  for (const c of await listarConexiones(usuarioId)) {
     if (c.plataforma !== 'BINANCE') continue;
     if (c.estado === 'VENCIDA') {
       salida.push({ conexion: c.etiqueta, estado: 'error', detalle: 'La credencial esta marcada como vencida: actualizala.' });
@@ -41,7 +41,7 @@ export async function importarHistorial(): Promise<ResultadoImportacion[]> {
 
     let cred: CredencialBinance | undefined;
     try {
-      cred = await leerCredencial<CredencialBinance>(c.id);
+      cred = await leerCredencial<CredencialBinance>(usuarioId, c.id);
 
       const [saldos, catalogo] = await Promise.all([tenencias(cred), pares()]);
       const aConsultar = paresDeInteres(saldos.map(s => s.activo), catalogo);
@@ -60,7 +60,7 @@ export async function importarHistorial(): Promise<ResultadoImportacion[]> {
       }
 
       const { movimientos, omitidas, comisionesNoUsd } = mapearTrades(trades, catalogo);
-      const { nuevos, repetidos } = await guardarMovimientos(movimientos, 'BINANCE');
+      const { nuevos, repetidos } = await guardarMovimientos(usuarioId, movimientos, 'BINANCE');
 
       const partes = [`${nuevos} ${nuevos === 1 ? 'operacion nueva' : 'operaciones nuevas'}`];
       if (repetidos) partes.push(`${repetidos} ya estaban`);
@@ -74,7 +74,7 @@ export async function importarHistorial(): Promise<ResultadoImportacion[]> {
       });
     } catch (e) {
       const secretos = cred ? [cred.apiKey, cred.apiSecret] : [];
-      await marcarError(c.id, e, secretos);
+      await marcarError(usuarioId, c.id, e, secretos);
       salida.push({ conexion: c.etiqueta, estado: 'error', detalle: errorCensurado(e, secretos) });
     }
   }
