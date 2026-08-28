@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth, ssoConfigurado } from './auth';
 import { listaDeEmails, enLaLista } from './lib/auth';
 
-// Datos financieros personales: nada es publico salvo lo que necesita el propio
-// login. /api/sync tiene su CRON_SECRET, que es lo que usa el cron de Vercel.
-const ABIERTAS = ['/api/auth', '/login', '/api/sync'];
+// Nada es publico. Estas rutas salen del middleware porque **se autentican
+// solas**, no porque esten abiertas:
+//   /api/auth  → el propio flujo de login
+//   /login     → la pantalla de login
+//   /api/sync  → CRON_SECRET, el cron de Vercel
+//   /api/mcp   → su token Bearer, porque un cliente MCP no tiene la cookie
+const ABIERTAS = ['/api/auth', '/login', '/api/sync', '/api/mcp'];
 const abierta = (p: string) => ABIERTAS.some(a => p === a || p.startsWith(a + '/'));
 
 /** Basic Auth: lo que habia antes del SSO, y lo que queda si Google no esta configurado. */

@@ -153,6 +153,27 @@ Y los simbolos se descomponen con `exchangeInfo`, no partiendo el string:
 "ETHBTC" se puede leer ETH/BTC o ETHB/TC, y adivinar por prefijos falla con los
 activos nuevos.
 
+## Servidor MCP
+
+`app/api/mcp` expone las finanzas a Claude Desktop / Claude Code. Tres reglas:
+
+- **Solo lectura.** No hay una sola herramienta que escriba, y `lib/mcp.test.ts`
+  lo verifica por nombre. La garantia no es que nadie las llame mal: es que no
+  existen.
+- **Agregado, no crudo.** `lib/consultas.ts` devuelve totales, categorias y
+  conteos. No hay un volcado de tabla: lo que sale va a un modelo, y menos dato
+  en el prompt es menos dato afuera. Todo pasa por `redactarProfundo`.
+- **Token propio.** La cookie de sesion no sirve: el cliente MCP no pasa por el
+  navegador. Va `Bearer <email>:<MCP_TOKEN>`, comparado en tiempo constante. Sin
+  `MCP_TOKEN` el endpoint responde 401 a todo.
+
+El despacho del protocolo vive en `lib/mcp.ts`, separado de la ruta, para poder
+probarlo entero sin base ni servidor. La ruta se queda con transporte y auth.
+
+Un error de argumento vuelve como `isError` dentro del resultado, **no** como
+error de protocolo: el modelo tiene que poder leer "el periodo estaba mal" y
+corregir, no cortar la conversacion.
+
 ## De quien es cada dato
 
 Doce tablas tienen dueño (`usuario_id`). Las hijas —`consumos`, `positions`,
