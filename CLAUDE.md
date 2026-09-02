@@ -40,6 +40,57 @@ Todo lo que devuelve el modelo pasa por las funciones de `lib/guardar.ts`:
 conversión de números tolerante al formato argentino, defaults en los textos,
 fechas inválidas a `null` y períodos validados contra `YYYY-MM`.
 
+## Plata en dos monedas
+
+Un sueldo partido —parte en dolares, parte en pesos— rompe la idea de que un
+total dice algo solo. Consolidar es elegir un tipo de cambio, y **el tipo de
+cambio de un mes es el de ese mes**: mirar agosto del año pasado con el dolar de
+hoy no da un numero aproximado, da uno absurdo.
+
+Por eso `monthly_closes` guarda `tipo_cambio` y esa cifra queda **congelada** al
+cerrar. Del mes en curso se usa el MEP de hoy, y se dice que es de hoy.
+
+Se guardan las partes crudas (`ingreso_ars` + `ingreso_usd`), nunca el total ya
+sumado: si el tipo de cambio de un mes estaba mal cargado, alcanza con
+corregirlo y todo se recalcula.
+
+Cuando hay dolares y **no** hay tipo de cambio, el total es `null`, no la parte
+en pesos sola. Mostrar 300.000 cuando ademas hay USD 1.000 sin convertir es peor
+que mostrar "—": el numero parece completo y no lo esta.
+
+## Pagado y pendiente
+
+Cargar un gasto y pagarlo son dos momentos distintos. Pero lo pendiente **no
+cambia el cierre**: el gasto ya esta imputado al mes lo hayas pagado o no. Lo que
+cambia es tu caja. Confundirlos haria que pagar tarde parezca gastar menos, y la
+pantalla lo aclara para que nadie lo lea al reves.
+
+## Estimar no es cerrar
+
+`lib/estimacion.ts` calcula el mes que viene **al vuelo** y no escribe nada. Si
+se guardara en `monthly_closes`, contaminaria los promedios que alimentan la
+proxima estimacion: el error se realimenta y crece solo.
+
+Se arma de tres pedazos con confianza muy distinta, y por eso se reportan
+separados: **comprometido** (cuotas ya firmadas, no es prediccion),
+**recurrente** (aparece en la mitad o mas de los meses) y **variable** (el
+resto). Cada categoria sale de la **mediana**, no del promedio: un mes con un
+gasto raro corre el promedio y no la mediana.
+
+La categoria `Cuotas` del historico se **excluye** del calculo por categoria,
+porque las cuotas ya entran por el lado de los prestamos. Es la mas facil de
+contar dos veces.
+
+## Comprar en cuotas es un prestamo
+
+Una compra en cuotas tiene exactamente la forma de un credito: cuantas cuotas,
+de cuanto, desde cuando. Va a la tabla `prestamos`, no a `gastos`, y no hay tabla
+paralela. Guardarla como un gasto puntual hundiria el mes de la compra y dejaria
+los meses siguientes sin la cuota que si se va a pagar.
+
+El clasificador de texto libre devuelve `tipo: "CUOTAS"` cuando detecta que el
+pago se reparte, aunque se mencione el precio total.
+
 ## Como se llaman los numeros
 
 Una etiqueta que no describe lo que el numero contiene manda a buscar la

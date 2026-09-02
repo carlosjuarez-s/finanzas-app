@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { interpretarTexto, faltaProveedor } from '@/lib/extract';
-import { guardarGasto } from '@/lib/guardar';
+import { guardarGasto, guardarCuotas } from '@/lib/guardar';
 import { guardarCierres } from '@/lib/cierre';
 import { mensajeDeError } from '@/lib/errores';
 import { idUsuarioActual } from '@/lib/usuario';
@@ -27,6 +27,21 @@ export async function POST(req: NextRequest) {
 
   try {
     const { resultado, hallazgos } = await interpretarTexto(descripcion);
+
+    // Una compra en cuotas no es un gasto de este mes: es un compromiso
+    // repartido. Va al plan de cuotas y desde ahi suma a cada mes que toca.
+    if (resultado.tipo === 'CUOTAS') {
+      const plan = await guardarCuotas(usuarioId, resultado.datos);
+      try {
+        await guardarCierres(usuarioId);
+      } catch (e) {
+        return NextResponse.json({
+          estado: 'cuotas', plan, hallazgos,
+          historico: `El plan se guardo, pero fallo el recalculo del historico. ${mensajeDeError(e)}`,
+        });
+      }
+      return NextResponse.json({ estado: 'cuotas', plan, hallazgos });
+    }
 
     if (resultado.tipo !== 'GASTO') {
       return NextResponse.json({

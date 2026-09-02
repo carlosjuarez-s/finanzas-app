@@ -42,8 +42,19 @@ export type DocumentoClasificado =
   | { tipo: 'PORTFOLIO'; datos: PortfolioData }
   | { tipo: 'DESCONOCIDO'; datos: { motivo?: string } };
 
+// Un plan de cuotas descrito a mano: "compre una heladera en 12 cuotas de 45 mil".
+export type CuotasData = {
+  nombre: string;
+  entidad: string | null;
+  cuotas: number;
+  cuotaArs: number;
+  primerPeriodo: string;          // YYYY-MM
+  montoOtorgado: number | null;
+};
+
 export type TextoClasificado =
   | { tipo: 'GASTO'; datos: GastoData }
+  | { tipo: 'CUOTAS'; datos: CuotasData }
   | { tipo: 'DESCONOCIDO'; datos: { motivo?: string } };
 
 // Un movimiento de un export de broker: la fila cruda ya interpretada.

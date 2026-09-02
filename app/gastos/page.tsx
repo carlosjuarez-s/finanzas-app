@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, salaries, gastos, prestamosPersonales } from '@/db/schema';
-import { cargarPrestamos } from '@/lib/cierre';
+import { cargarPrestamos, tipoCambioDelMes } from '@/lib/cierre';
+import { estadoDePagos, type EstadoDePagos } from '@/lib/pagos';
 import { totalDelMes, type Prestamo } from '@/lib/prestamos';
 import type { PrestamoPersonal } from '@/lib/fiado';
 import { fmtArs, fmtPeriodo } from '@/lib/formato';
@@ -12,6 +13,7 @@ import GastoTexto from '../gasto-texto';
 import BarChart from '../bar-chart';
 import Prestamos from './prestamos';
 import Fiado from './fiado';
+import Pendientes from './pendientes';
 import Editor, { type Item } from './editor';
 import { idUsuarioActual } from '@/lib/usuario';
 
@@ -30,6 +32,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   let sueldo: typeof salaries.$inferSelect | undefined;
   let prestamos: Prestamo[] = [];
   let fiados: PrestamoPersonal[] = [];
+  let pagos: EstadoDePagos = { pendientes: [], pagados: 0, faltaPagarArs: 0 };
 
   async function cargarStatements(p: string) {
     return db.query.statements.findMany({
@@ -94,6 +97,10 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
       cargarPrestamos(usuarioId),
       cargarFiados(),
     ]);
+
+    // Lo pendiente se mira en pesos: para eso hace falta el tipo de cambio del
+    // mes, el mismo que usa el cierre.
+    pagos = await estadoDePagos(usuarioId, periodo, await tipoCambioDelMes(usuarioId, periodo, null));
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;
@@ -142,6 +149,8 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
       )}
 
       <GastoTexto />
+
+      <Pendientes {...pagos} />
 
       <Prestamos prestamos={prestamos} periodo={periodo} />
 

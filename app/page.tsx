@@ -55,8 +55,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Mismo calculo que persiste el historico: si divergieran, el dashboard y los
   // graficos mostrarian numeros distintos para el mismo mes.
-  const { ingresoArs: neto, gastoArs, gastoUsd, percepArs: percep, ahorroArs: ahorro, tasaAhorro: tasa, porCategoria } =
-    await calcularCierre(usuarioId, periodo);
+  const cierre = await calcularCierre(usuarioId, periodo);
+  const { gastoArs, gastoUsd, percepArs: percep, tasaAhorro: tasa, porCategoria, tipoCambio } = cierre;
+
+  // Consolidados. Null cuando hay dolares y no se consiguio tipo de cambio: en
+  // ese caso la pantalla muestra "—" en vez de un total que parece completo.
+  const neto = cierre.ingresoTotalArs;
+  const gastoTotal = cierre.gastoTotalArs;
+  const ahorro = cierre.ahorroArs;
 
   const cats = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
 
@@ -94,7 +100,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const reparto = [
     { etiqueta: 'Tarjetas', valor: tarjetasArs, color: COLOR_TARJETA },
     { etiqueta: 'Servicios, alquiler y cuotas', valor: otrosArs, color: COLOR_OTROS },
-    { etiqueta: 'Ahorro', valor: Math.max(0, ahorro), color: COLOR_AHORRO },
+    { etiqueta: 'Ahorro', valor: Math.max(0, ahorro ?? 0), color: COLOR_AHORRO },
   ];
 
   const subs = sts.flatMap(st => st.consumos).filter(c => c.categoria === 'Suscripciones');
@@ -114,26 +120,50 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <SyncButton />
 
       <div className="ledger">
-        <div className="celda"><p className="eyebrow">Ingreso neto</p><p className="valor ars">{fmtArs(neto)}</p></div>
+        <div className="celda">
+          <p className="eyebrow">Ingreso neto</p>
+          <p className="valor ars">{neto === null ? '—' : fmtArs(neto)}</p>
+          {cierre.ingresoUsd > 0 && (
+            <p className="monto usd" style={{ fontSize: 12 }}>incluye {fmtUsd(cierre.ingresoUsd)}</p>
+          )}
+        </div>
         <div className="op">−</div>
         {/* Gastos y no "Tarjetas": este numero incluye los resumenes, los gastos
             sueltos (servicios, alquiler) y la cuota de los prestamos. Llamarlo
             tarjetas mandaba a buscar la diferencia al resumen, donde no estaba. */}
-        <div className="celda"><p className="eyebrow">Gastos</p><p className="valor ars">{fmtArs(gastoArs)}</p><p className="monto usd" style={{ fontSize: 12 }}>{fmtUsd(gastoUsd)}</p></div>
+        <div className="celda">
+          <p className="eyebrow">Gastos</p>
+          <p className="valor ars">{gastoTotal === null ? '—' : fmtArs(gastoTotal)}</p>
+          {gastoUsd > 0 && <p className="monto usd" style={{ fontSize: 12 }}>incluye {fmtUsd(gastoUsd)}</p>}
+        </div>
         <div className="op">=</div>
         <div className="celda">
           <p className="eyebrow">Ahorro {tasa !== null && `(${tasa.toFixed(1)}%)`}</p>
-          <p className="valor" style={{ color: ahorro >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>{fmtArs(ahorro)}</p>
+          <p className="valor" style={{ color: (ahorro ?? 0) >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>
+            {ahorro === null ? '—' : fmtArs(ahorro)}
+          </p>
         </div>
       </div>
 
-      {neto > 0 && (
+      {/* El ingreso partido en dos monedas es el caso normal acá, no la
+          excepcion: sin decir el tipo de cambio, el total en pesos es un
+          numero que no se puede reproducir. */}
+      {cierre.ingresoUsd > 0 && (
+        <p className="nota">
+          El sueldo entra partido: {fmtArs(cierre.ingresoArs)} en pesos y {fmtUsd(cierre.ingresoUsd)}.
+          {tipoCambio
+            ? ` Se consolidó a $${tipoCambio.toLocaleString('es-AR')} por dólar${esMesActual ? ' (cotización de hoy)' : ', el del cierre de ese mes'}.`
+            : ' Falta el tipo de cambio para poder sumarlos: cargá uno en Proyección.'}
+        </p>
+      )}
+
+      {neto !== null && neto > 0 && (
         <section>
           <h2>A dónde fue el sueldo</h2>
           <StackedBar partes={reparto} total={neto} formato="ars" />
-          {ahorro < 0 && (
+          {ahorro !== null && ahorro < 0 && (
             <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
-              Este mes gastaste {fmtArs(-ahorro)} más de lo que entró, así que no hay
+              Este mes gastaste {fmtArs(-(ahorro ?? 0))} más de lo que entró, así que no hay
               ahorro que repartir: la barra muestra en qué se fue el sueldo, no cómo
               se dividió. Puede ser real, o puede que falte cargar algún ingreso.
             </p>

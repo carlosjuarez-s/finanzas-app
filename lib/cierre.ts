@@ -2,17 +2,47 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, salaries, monthlyCloses, gastos, prestamos } from '@/db/schema';
 import { totalDelMes, periodosConCuota, type Prestamo } from './prestamos';
+import { consolidar, tasaAhorro as calcularTasa } from './bimoneda';
+import { leerSupuestos } from './supuestos';
+import { dolares } from './precios';
 
 export type Cierre = {
   periodo: string;
+  // Crudos, cada uno en su moneda.
   ingresoArs: number;
+  ingresoUsd: number;
   gastoArs: number;
   gastoUsd: number;
+  /** El que se uso para consolidar este mes. Null si no habia con que. */
+  tipoCambio: number | null;
+  // Consolidados en pesos. Null cuando hay dolares y no hay tipo de cambio:
+  // un total a medias se lee como completo y miente.
+  ingresoTotalArs: number | null;
+  gastoTotalArs: number | null;
+  ahorroArs: number | null;
   percepArs: number;
-  ahorroArs: number;
   tasaAhorro: number | null;   // null si no hay recibo: distinto de 0%
   porCategoria: Record<string, number>;
 };
+
+/**
+ * El tipo de cambio con el que se consolida un mes.
+ *
+ * Para un mes ya cerrado manda el que quedo guardado: es el de su momento y no
+ * se toca. Para el mes en curso se usa el MEP de hoy, y si la red falla, el
+ * supuesto configurado. Nunca se repisa el de un mes cerrado con el de hoy.
+ */
+export async function tipoCambioDelMes(
+  usuarioId: string, periodo: string, guardado: number | null,
+): Promise<number | null> {
+  if (guardado && guardado > 0) return guardado;
+
+  const enVivo = (await dolares()).mep;
+  if (enVivo && enVivo > 0) return enVivo;
+
+  const s = await leerSupuestos(usuarioId);
+  return s.tipoCambioArs > 0 ? s.tipoCambioArs : null;
+}
 
 // El recibo del mes anterior es el que paga los consumos de este cierre; si ya
 // entro el del mes en curso, ese manda.
@@ -71,7 +101,21 @@ export async function calcularCierre(usuarioId: string, periodo: string): Promis
     + sueltos.reduce((s, g) => s + Number(g.montoUsd), 0);
   const percepArs = sts.reduce((s, st) => s + Number(st.percepArs), 0);
   const ingresoArs = Number(salary?.netoArs ?? 0);
-  const ahorroArs = ingresoArs - gastoArs;
+  const ingresoUsd = Number(salary?.netoUsd ?? 0);
+
+  // El tipo de cambio guardado del mes, si ya se cerro alguna vez.
+  const [previo] = await db.select({ tipoCambio: monthlyCloses.tipoCambio })
+    .from(monthlyCloses)
+    .where(and(eq(monthlyCloses.usuarioId, usuarioId), eq(monthlyCloses.periodo, periodo)));
+
+  const tc = await tipoCambioDelMes(usuarioId, periodo, previo?.tipoCambio === undefined || previo.tipoCambio === null ? null : Number(previo.tipoCambio));
+
+  const ingreso = consolidar({ ars: ingresoArs, usd: ingresoUsd }, tc);
+  const gasto = consolidar({ ars: gastoArs, usd: gastoUsd }, tc);
+
+  const ahorroArs = ingreso.totalArs === null || gasto.totalArs === null
+    ? null
+    : ingreso.totalArs - gasto.totalArs;
 
   const porCategoria: Record<string, number> = {};
   for (const st of sts) for (const c of st.consumos) {
@@ -83,8 +127,13 @@ export async function calcularCierre(usuarioId: string, periodo: string): Promis
   if (cuotasArs) porCategoria['Cuotas'] = (porCategoria['Cuotas'] ?? 0) + cuotasArs;
 
   return {
-    periodo, ingresoArs, gastoArs, gastoUsd, percepArs, ahorroArs,
-    tasaAhorro: ingresoArs ? (ahorroArs / ingresoArs) * 100 : null,
+    periodo, ingresoArs, ingresoUsd, gastoArs, gastoUsd,
+    tipoCambio: tc,
+    ingresoTotalArs: ingreso.totalArs,
+    gastoTotalArs: gasto.totalArs,
+    ahorroArs,
+    percepArs,
+    tasaAhorro: calcularTasa(ingreso.totalArs, ahorroArs),
     porCategoria,
   };
 }
@@ -118,18 +167,22 @@ export async function guardarCierres(usuarioId: string, periodos?: string[]): Pr
       .values({
         usuarioId,
         periodo: c.periodo,
-        ingresoArs: String(c.ingresoArs), gastoArs: String(c.gastoArs),
-        gastoUsd: String(c.gastoUsd), percepArs: String(c.percepArs),
-        ahorroArs: String(c.ahorroArs),
+        ingresoArs: String(c.ingresoArs), ingresoUsd: String(c.ingresoUsd),
+        gastoArs: String(c.gastoArs), gastoUsd: String(c.gastoUsd),
+        tipoCambio: c.tipoCambio === null ? null : String(c.tipoCambio),
+        percepArs: String(c.percepArs),
+        ahorroArs: String(c.ahorroArs ?? 0),
         tasaAhorro: c.tasaAhorro === null ? null : String(c.tasaAhorro.toFixed(2)),
         porCategoria: c.porCategoria,
       })
       .onConflictDoUpdate({
         target: [monthlyCloses.usuarioId, monthlyCloses.periodo],
         set: {
-          ingresoArs: String(c.ingresoArs), gastoArs: String(c.gastoArs),
-          gastoUsd: String(c.gastoUsd), percepArs: String(c.percepArs),
-          ahorroArs: String(c.ahorroArs),
+          ingresoArs: String(c.ingresoArs), ingresoUsd: String(c.ingresoUsd),
+          gastoArs: String(c.gastoArs), gastoUsd: String(c.gastoUsd),
+          tipoCambio: c.tipoCambio === null ? null : String(c.tipoCambio),
+          percepArs: String(c.percepArs),
+          ahorroArs: String(c.ahorroArs ?? 0),
           tasaAhorro: c.tasaAhorro === null ? null : String(c.tasaAhorro.toFixed(2)),
           porCategoria: c.porCategoria,
           calculadoAt: new Date(),

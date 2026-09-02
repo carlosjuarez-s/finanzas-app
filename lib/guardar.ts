@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { statements, consumos, salaries, portfolioSnapshots, positions, gastos, transacciones } from '@/db/schema';
+import { statements, consumos, salaries, portfolioSnapshots, positions, gastos, transacciones, prestamos } from '@/db/schema';
 import { CATEGORIAS } from './prompts';
-import type { StatementData, SalaryData, PortfolioData, GastoData, MovimientoData } from './tipos';
+import type { StatementData, SalaryData, PortfolioData, GastoData, MovimientoData, CuotasData } from './tipos';
 
 // Insercion compartida entre el sync de Drive y el upload manual. El fileId es
 // la identidad del documento de origen: el id de Drive, o "upload:<hash>" para
@@ -207,4 +207,43 @@ export async function guardarPortfolio(usuarioId: string, periodo: string, data:
     })));
   }
   return { id: snap.id, posiciones: tenencias.length };
+}
+
+/**
+ * Un plan de cuotas descrito a mano alzada.
+ *
+ * Va a `prestamos` y no a `gastos` porque no es un gasto de este mes: es un
+ * compromiso repartido en varios, con exactamente la misma forma que un credito
+ * bancario. Guardarlo como un gasto puntual hundiria el mes de la compra y
+ * dejaria los meses siguientes sin la cuota que si van a pagarse.
+ *
+ * Todo esto lo produjo un modelo: entra como dato no confiable y se valida.
+ */
+export async function guardarCuotas(usuarioId: string, data: CuotasData) {
+  const nombre = texto(data?.nombre, '').trim();
+  const cuotas = Math.trunc(num(data?.cuotas));
+  const cuotaArs = num(data?.cuotaArs);
+  const primerPeriodo = texto(data?.primerPeriodo, '');
+
+  if (!nombre) throw new Error('No se entendio que compraste.');
+  if (!Number.isInteger(cuotas) || cuotas < 1 || cuotas > 600) {
+    throw new Error(`La cantidad de cuotas no tiene sentido (vino "${data?.cuotas}").`);
+  }
+  if (cuotaArs <= 0) throw new Error('No se pudo leer el valor de la cuota.');
+  if (!periodoValido(primerPeriodo)) {
+    throw new Error(`El mes de la primera cuota no tiene formato YYYY-MM (vino "${data?.primerPeriodo}").`);
+  }
+
+  const [fila] = await db.insert(prestamos).values({
+    usuarioId,
+    nombre,
+    entidad: typeof data?.entidad === 'string' && data.entidad.trim() ? data.entidad.trim() : null,
+    montoOtorgado: num(data?.montoOtorgado) > 0 ? String(num(data.montoOtorgado)) : null,
+    cuotas: String(cuotas),
+    cuotaArs: String(cuotaArs),
+    primerPeriodo,
+    moneda: 'ARS',
+  }).returning({ id: prestamos.id });
+
+  return { id: fila.id, nombre, cuotas, cuotaArs, primerPeriodo };
 }

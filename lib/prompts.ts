@@ -8,6 +8,26 @@ export const CATEGORIAS = [
   'Alquiler', 'Transporte', 'Educacion', 'Otros',
 ] as const;
 
+// Una compra en cuotas NO es un gasto de este mes: es un compromiso repartido
+// en varios. Tiene la misma forma que un prestamo —cuantas cuotas, de cuanto,
+// desde cuando— y por eso se guarda en la misma tabla, en vez de inventar una
+// paralela que despues habria que sumar en todos lados.
+export const CUOTAS_SPEC = `{
+  "nombre": string,                 // que compraste: "Heladera", "Notebook"
+  "entidad": string | null,         // donde: "Frávega", "Mercado Libre"
+  "cuotas": number,                 // cuantas, entero mayor a cero
+  "cuotaArs": number,               // cuanto se paga POR MES, no el total
+  "primerPeriodo": "YYYY-MM",       // mes de la primera cuota
+  "montoOtorgado": number | null    // precio total si lo dice, null si no
+}
+
+Reglas:
+- "12 cuotas de 45.000" -> cuotas=12, cuotaArs=45000. NO pongas el total en cuotaArs.
+- Si dice el total y las cuotas pero no el valor de cada una ("450.000 en 10 cuotas"),
+  calcula cuotaArs = total / cuotas y poné montoOtorgado = el total.
+- Si no dice desde cuando, asumí el mes actual.
+- "sin interés" no cambia nada del esquema: igual son cuotas.`;
+
 // Esquema de un gasto suelto: boleta de servicio, alquiler, o cualquier
 // comprobante informal fotografiado.
 export const GASTO_SPEC = `{
@@ -200,11 +220,22 @@ Sobre el tono: nada de "es importante destacar" ni "recorda siempre". Si algo es
 
 // Carga por texto: "pague 85000 de alquiler en septiembre". El texto ya viene
 // redactado de datos personales antes de llegar al modelo.
-export const TEXTO_SYSTEM = `Interpretas una descripcion escrita a mano alzada de un gasto y devolves SOLO JSON valido, sin markdown:
+export const TEXTO_SYSTEM = `Interpretas una descripcion escrita a mano alzada y devolves SOLO JSON valido, sin markdown:
 
-{ "tipo": "GASTO" | "DESCONOCIDO", "datos": { ... } }
+{ "tipo": "GASTO" | "CUOTAS" | "DESCONOCIDO", "datos": { ... } }
 
-Si se entiende el gasto, "datos" respeta este esquema:
+Elegi el tipo con este criterio:
+- CUOTAS: la compra se paga en varios meses. Señales: "en N cuotas", "cuotas de $X",
+  "12 sin interes", "lo pague en 6 pagos". Es el tipo correcto AUNQUE se mencione el
+  precio total, porque lo que importa es que el compromiso se reparte en el tiempo.
+- GASTO: se pago de una, este mes. Es el caso normal.
+- DESCONOCIDO: no se entiende con confianza.
+
+Si tipo es CUOTAS, "datos" respeta:
+
+${CUOTAS_SPEC}
+
+Si tipo es GASTO, "datos" respeta:
 
 ${GASTO_SPEC}
 

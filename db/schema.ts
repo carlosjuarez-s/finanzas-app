@@ -30,6 +30,9 @@ export const statements = pgTable('statements', {
   totalUsd: numeric('total_usd', { precision: 10, scale: 2 }).notNull(),
   percepArs: numeric('percep_ars', { precision: 14, scale: 2 }).notNull(), // RG 4815/5617
   raw: jsonb('raw').notNull(),
+  // Un resumen se paga entero: no tiene sentido marcar linea por linea.
+  pagado: boolean('pagado').notNull().default(false),
+  pagadoEn: text('pagado_en'),                 // YYYY-MM-DD
   createdAt: timestamp('created_at').defaultNow().notNull(),
   // Unico por usuario y no global: dos personas pueden tener el mismo archivo,
   // y con un unique global el segundo en subirlo se comeria un error ajeno.
@@ -53,7 +56,12 @@ export const salaries = pgTable('salaries', {
   usuarioId: duenio(),
   fileId: text('file_id').notNull(),
   periodo: text('periodo').notNull(),
+  // Un sueldo puede venir partido en dos monedas. Se guardan las dos partes
+  // crudas y no un total ya convertido: el total depende del tipo de cambio, y
+  // guardar el resultado congelaria una conversion que despues no se puede
+  // rehacer si el tipo de cambio del mes estaba mal cargado.
   netoArs: numeric('neto_ars', { precision: 14, scale: 2 }).notNull(),
+  netoUsd: numeric('neto_usd', { precision: 12, scale: 2 }).notNull().default('0'),
   corregido: boolean('corregido').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, t => [uniqueIndex('salary_usuario_periodo').on(t.usuarioId, t.periodo)]);
@@ -86,9 +94,17 @@ export const monthlyCloses = pgTable('monthly_closes', {
   id: text('id').primaryKey().$defaultFn(createId),
   usuarioId: duenio(),
   periodo: text('periodo').notNull(),
+  // Las cuatro cifras crudas, cada una en su moneda. El total consolidado NO
+  // se guarda: se deriva con `tipoCambio`, asi si el tipo de cambio del mes
+  // estaba mal cargado alcanza con corregirlo y todo se recalcula.
   ingresoArs: numeric('ingreso_ars', { precision: 14, scale: 2 }).notNull(),
+  ingresoUsd: numeric('ingreso_usd', { precision: 12, scale: 2 }).notNull().default('0'),
   gastoArs: numeric('gasto_ars', { precision: 14, scale: 2 }).notNull(),
   gastoUsd: numeric('gasto_usd', { precision: 10, scale: 2 }).notNull(),
+  // El tipo de cambio con el que se consolido ESTE mes, congelado al cerrarlo.
+  // Sin esto, mirar un mes de hace un año con el dolar de hoy diria que
+  // ganabas una fortuna: la conversion tiene que ser la de su momento.
+  tipoCambio: numeric('tipo_cambio', { precision: 14, scale: 4 }),
   percepArs: numeric('percep_ars', { precision: 14, scale: 2 }).notNull(),
   ahorroArs: numeric('ahorro_ars', { precision: 14, scale: 2 }).notNull(),
   // null cuando no hay recibo cargado: 0% y "no se sabe" no son lo mismo.
@@ -113,6 +129,11 @@ export const gastos = pgTable('gastos', {
   montoArs: numeric('monto_ars', { precision: 14, scale: 2 }).notNull(),
   montoUsd: numeric('monto_usd', { precision: 10, scale: 2 }).notNull().default('0'),
   origen: text('origen').notNull(),            // BOLETA | FOTO | TEXTO | MANUAL
+  // Cargar un gasto y pagarlo son dos momentos distintos: la boleta de luz
+  // entra cuando llega y se paga dias despues. Sin este estado, "cuanto me
+  // falta pagar este mes" no se puede responder.
+  pagado: boolean('pagado').notNull().default(false),
+  pagadoEn: text('pagado_en'),                 // YYYY-MM-DD
   // Marca si una persona corrigio lo que interpreto el modelo: sirve para saber
   // en que datos confiar y para no pisarlos si se reprocesa el documento.
   corregido: boolean('corregido').notNull().default(false),

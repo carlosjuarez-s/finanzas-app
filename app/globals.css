@@ -320,6 +320,23 @@ section > h2 {
    comparando de arriba abajo. */
 .leyenda-apilada .monto { text-align: right; }
 
+/* Fila de pago pendiente. El concepto puede ser largo ("Tarjeta MASTER") y al
+   lado tiene el monto MAS un boton: en un telefono no queda ancho y la palabra
+   se parte por la mitad. En mobile el monto y el boton bajan a su linea. */
+.fila-pago .pago-cuanto { text-align: right; white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .fila-pago { flex-direction: column; align-items: stretch; gap: 8px; }
+  .fila-pago .pago-cuanto {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+    white-space: normal;
+  }
+}
+
 /* Dos salidas para el mismo monto. No es una lista decorativa: el orden importa
    —evitarla vale mas que recuperarla— y por eso va numerada visualmente. */
 .salidas {

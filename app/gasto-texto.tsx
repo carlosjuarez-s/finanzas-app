@@ -7,8 +7,9 @@ import { Button, Input, Space, Typography, Tag } from 'antd';
 const { Text } = Typography;
 
 type Respuesta = {
-  estado?: 'cargado' | 'desconocido';
+  estado?: 'cargado' | 'cuotas' | 'desconocido';
   gasto?: { concepto: string; categoria: string; periodo: string; montoArs: number };
+  plan?: { nombre: string; cuotas: number; cuotaArs: number; primerPeriodo: string };
   detalle?: string;
   hallazgos?: string[];
   historico?: string;
@@ -34,7 +35,7 @@ export default function GastoTexto() {
       const cuerpo = await r.json().catch(() => null);
       if (!r.ok) throw new Error(cuerpo?.error ?? `El servidor respondio ${r.status}`);
       setRes(cuerpo);
-      if (cuerpo.estado === 'cargado') {
+      if (cuerpo.estado === 'cargado' || cuerpo.estado === 'cuotas') {
         setDescripcion('');
         router.refresh();
       }
@@ -51,7 +52,8 @@ export default function GastoTexto() {
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
         <Text type="secondary" className="resultado">
           Para lo que no tiene comprobante. Ejemplo: «pagué 85 lucas de alquiler en septiembre»
-          o «12.500 de gas, vence el 20».
+          o «12.500 de gas, vence el 20». Si decís que es en cuotas —«compré una heladera en
+          12 cuotas de 45.000»— se guarda como plan y suma a cada mes, no todo a este.
         </Text>
 
         <Input.TextArea
@@ -74,6 +76,14 @@ export default function GastoTexto() {
             Guardado: {res.gasto.concepto} · {res.gasto.periodo} ·{' '}
             $ {res.gasto.montoArs.toLocaleString('es-AR')}
             <Tag style={{ marginLeft: 8 }}>{res.gasto.categoria}</Tag>
+          </Text>
+        )}
+
+        {res?.estado === 'cuotas' && res.plan && (
+          <Text type="success" className="resultado">
+            Plan cargado: {res.plan.nombre} · {res.plan.cuotas} cuotas de{' '}
+            {res.plan.cuotaArs.toLocaleString('es-AR')} desde {res.plan.primerPeriodo}.
+            Se suma a cada mes, no todo a este.
           </Text>
         )}
 
