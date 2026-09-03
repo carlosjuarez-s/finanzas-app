@@ -113,6 +113,25 @@ Lo percibido **es** lo que se habria ahorrado, asi que no hay funcion que lo
 "calcule": seria devolver el mismo numero. El monto se muestra una sola vez;
 repetirlo en dos filas se lee como un error de calculo.
 
+## El portafolio creció, ¿pero por que?
+
+Un total mes a mes no dice si invertiste bien, y es el error clasico de todo
+tracker: si un mes aportaste USD 1.000 y el mercado cayo, el total igual sube y
+el grafico dice que te fue bien.
+
+**Creciste porque pusiste plata** y **creciste porque lo que tenias subio** son
+dos cosas distintas, y solo la segunda mide algo. Por eso el historico lleva dos
+lineas —valor y aportado— y la distancia entre ellas es el resultado.
+
+`rendimiento = cambio − aportes` es una aproximacion: trata todos los aportes
+como si hubieran entrado al principio del tramo. Responde "¿subio porque puse
+plata o porque rindio?", que es la pregunta real; no sirve para comparar contra
+un indice.
+
+Una operacion en pesos sin el dolar de su dia queda **afuera** del aportado y se
+cuenta aparte. Convertirla al dolar de hoy diria que compraste mucho mas barato
+de lo que compraste.
+
 ## Graficos
 
 La forma sale del trabajo que tiene que hacer el lector, y el color va al final.

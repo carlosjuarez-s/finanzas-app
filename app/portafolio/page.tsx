@@ -10,6 +10,9 @@ import FaltaMigracion from '../falta-migracion';
 import AltaTransaccion from './alta-transaccion';
 import Operaciones, { type Operacion } from './operaciones';
 import BarChart from '../bar-chart';
+import LineChart from '../line-chart';
+import { historial, variacion, type SnapshotPeriodo } from '@/lib/historial-portafolio';
+import { fmtPeriodo } from '@/lib/formato';
 import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +21,7 @@ export default async function Portafolio() {
   const usuarioId = await idUsuarioActual();
   let resultados, errores, tenencias, ops: Operacion[] = [];
   let sinPrecio: string[] = [];
+  let serie: SnapshotPeriodo[] = [];
   try {
     // Ultimo snapshot de cada plataforma: es lo que el broker dice que tenes.
     const snaps = await db.query.portfolioSnapshots.findMany({
@@ -44,6 +48,23 @@ export default async function Portafolio() {
     sinPrecio = enVivo.sinPrecio;
 
     ({ resultados, errores } = await resultadosPorActivo(usuarioId, precios));
+
+    // Para el historico hacen falta TODOS los snapshots, no los ultimos 8 que
+    // alcanzan para la foto de hoy.
+    const todos = await db.select({
+      periodo: portfolioSnapshots.periodo, totalUsd: portfolioSnapshots.totalUsd,
+    }).from(portfolioSnapshots).where(eq(portfolioSnapshots.usuarioId, usuarioId));
+
+    // Un periodo puede tener varias plataformas: se suman. Si a alguna le falta
+    // la valuacion, el total del mes queda en null — un total al que le falta
+    // una plataforma se leeria como una caida que no existio.
+    const porPeriodo = new Map<string, number | null>();
+    for (const f of todos) {
+      const previo = porPeriodo.get(f.periodo);
+      const v = f.totalUsd === null ? null : Number(f.totalUsd);
+      porPeriodo.set(f.periodo, previo === null || v === null ? null : (previo ?? 0) + v);
+    }
+    serie = [...porPeriodo.entries()].map(([periodo, valorUsd]) => ({ periodo, valorUsd }));
     ops = (await db.select().from(transacciones)
       .where(eq(transacciones.usuarioId, usuarioId))
       .orderBy(desc(transacciones.fecha))).map(t => ({
@@ -57,6 +78,20 @@ export default async function Portafolio() {
     if (!tabla) throw e;
     return <FaltaMigracion tabla={tabla} seccion="Portafolio" />;
   }
+
+  // Cuanto pusiste vs cuanto vale. Se calcula sobre el libro de operaciones,
+  // que es lo que distingue "crecio porque aporte" de "crecio porque rindio".
+  const hist = historial(serie, ops.map(o => ({
+    activo: o.activo,
+    tipo: o.tipo === 'VENTA' ? 'VENTA' as const : 'COMPRA' as const,
+    fecha: o.fecha,
+    cantidad: o.cantidad,
+    precioUnitario: o.precioUnitario,
+    moneda: o.moneda === 'ARS' ? 'ARS' as const : 'USD' as const,
+    tipoCambioDia: o.tipoCambioDia,
+    comision: o.comision,
+  })));
+  const v = variacion(hist.puntos);
 
   // Una tenencia por activo, sumando plataformas.
   const consolidado = new Map<string, { cantidad: number; valorUsd: number | null; plataformas: Set<string> }>();
@@ -138,6 +173,47 @@ export default async function Portafolio() {
           Sin cotización para {sinPrecio.join(', ')}. Se muestra «—» en vez de un cero:
           no saber cuánto vale algo y que valga cero son cosas distintas.
         </p>
+      )}
+
+      {hist.puntos.length >= 2 && (
+        <section>
+          <h2>Cómo viene creciendo</h2>
+          <LineChart
+            etiquetas={hist.puntos.map(p => fmtPeriodo(p.periodo))}
+            series={[
+              { nombre: 'Valor', valores: hist.puntos.map(p => p.valorUsd ?? 0) },
+              { nombre: 'Aportado', valores: hist.puntos.map(p => p.aportadoUsd) },
+            ]}
+            formato="usd"
+            unidad="USD"
+          />
+
+          {/* La distancia entre las dos lineas ES el resultado. Sin la segunda,
+              un mes en que aportaste y el mercado cayo se ve como crecimiento. */}
+          {v && (
+            <p className="nota">
+              Entre {fmtPeriodo(v.desde)} y {fmtPeriodo(v.hasta)} el portafolio pasó de{' '}
+              {fmtUsd(v.valorInicialUsd)} a {fmtUsd(v.valorFinalUsd)}: subió {fmtUsd(v.cambioUsd)}.
+              De eso, {fmtUsd(v.aportadoUsd)} lo pusiste vos, así que el mercado te{' '}
+              {v.rendimientoUsd >= 0 ? 'dio' : 'sacó'} {fmtUsd(Math.abs(v.rendimientoUsd))}.
+            </p>
+          )}
+
+          <p className="nota">
+            Las dos líneas juntas son la única forma de saber si te fue bien: si solo mirás el
+            valor, un mes en que aportaste y el mercado cayó se ve igual que uno en que rendiste.
+            La distancia entre ellas es tu resultado.
+          </p>
+
+          {hist.operacionesSinConvertir > 0 && (
+            <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
+              {hist.operacionesSinConvertir}{' '}
+              {hist.operacionesSinConvertir === 1 ? 'operación en pesos no tiene' : 'operaciones en pesos no tienen'}{' '}
+              el dólar de su día y quedaron fuera del aportado. Completalas abajo para que la
+              línea sea real.
+            </p>
+          )}
+        </section>
       )}
 
       {composicion.length > 1 && (

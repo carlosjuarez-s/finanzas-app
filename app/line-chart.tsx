@@ -26,7 +26,10 @@ type Props = {
 
 const ALTO = 220;
 const ANCHO = 720;
-const PAD = { top: 16, right: 88, bottom: 28, left: 8 };
+// El margen derecho tiene que dar para el valor del eje ENTERO ("U$S 4.000,00")
+// a la fuente mobile de 24 unidades, o el numero queda cortado a la mitad. 88
+// alcanzaba con la fuente chica de escritorio y no con la del telefono.
+const PAD = { top: 16, right: 195, bottom: 34, left: 10 };
 
 // Ticks en numeros redondos: son los que cargan los valores que no se etiquetan.
 function ticks(min: number, max: number, cantidad = 4): number[] {
@@ -56,8 +59,22 @@ export default function LineChart({ etiquetas, series, formato = 'corto', unidad
   const x = (i: number) => PAD.left + (etiquetas.length === 1 ? plotW / 2 : (i / (etiquetas.length - 1)) * plotW);
   const y = (v: number) => PAD.top + plotH - ((v - escalaMin) / (escalaMax - escalaMin || 1)) * plotH;
 
-  // Una etiqueta cada tantos puntos: con muchos meses se pisan entre si.
-  const cadaX = Math.ceil(etiquetas.length / 8);
+  // Cuantas etiquetas entran sin pisarse.
+  //
+  // No alcanza con contar puntos: "feb 2026" ocupa el doble que "feb", y en un
+  // telefono siete etiquetas largas se superponen hasta quedar ilegibles.
+  //
+  // Se calcula con la fuente MOBILE (24 unidades del viewBox, que es lo que
+  // pone el media query de globals.css) y no con la de escritorio: el SVG no
+  // sabe a que ancho lo van a dibujar, y quedarse corto en el telefono es peor
+  // que mostrar cuatro etiquetas de mas en la pantalla grande. La tabla gemela
+  // sigue teniendo todos los valores.
+  const ANCHO_CARACTER = 13;   // ~0.55em sobre 24 unidades
+  const anchoEtiqueta = Math.max(...etiquetas.map(e => e.length)) * ANCHO_CARACTER;
+  // El +40 es aire entre etiquetas: pegadas se leen como una sola palabra
+  // ("feb 2026abr 2026"), que es casi tan malo como que se pisen.
+  const caben = Math.max(2, Math.floor(plotW / (anchoEtiqueta + 40)));
+  const cadaX = Math.ceil(etiquetas.length / caben);
 
   return (
     <div className="grafico">
@@ -70,8 +87,18 @@ export default function LineChart({ etiquetas, series, formato = 'corto', unidad
           </g>
         ))}
 
+        {/* La primera y la ultima se anclan a su borde: centradas se salen del
+            viewBox y el navegador las recorta. */}
         {etiquetas.map((etq, i) => i % cadaX === 0 && (
-          <text key={etq} x={x(i)} y={ALTO - 8} textAnchor="middle" className="eje">{etq}</text>
+          <text
+            key={etq}
+            x={x(i)}
+            y={ALTO - 8}
+            textAnchor={i === 0 ? 'start' : i >= etiquetas.length - 1 ? 'end' : 'middle'}
+            className="eje"
+          >
+            {etq}
+          </text>
         ))}
 
         {activo !== null && (
