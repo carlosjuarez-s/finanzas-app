@@ -15,6 +15,13 @@ export const fmtCorto = (n: number) => {
   return String(Math.round(n));
 };
 
+// La forma de un periodo, en un solo lugar: estaba copiada en tres modulos y
+// una copia que se corrige sola es una copia que se desincroniza.
+export const PERIODO = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+export const periodoValido = (v: unknown): v is string =>
+  typeof v === 'string' && PERIODO.test(v);
+
 // "2026-09" -> "sep 2026". El YYYY-MM crudo es dificil de leer en un eje.
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 export function fmtPeriodo(periodo: string): string {

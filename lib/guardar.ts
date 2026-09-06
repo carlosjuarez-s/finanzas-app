@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, consumos, salaries, portfolioSnapshots, positions, gastos, transacciones, prestamos } from '@/db/schema';
 import { leerCategorias, encajar } from './categorias';
+import { periodoValido } from './formato';
+import type { Sueldo } from './sueldo';
 import type { StatementData, SalaryData, PortfolioData, GastoData, MovimientoData, CuotasData } from './tipos';
 
 // Insercion compartida entre el sync de Drive y el upload manual. El fileId es
@@ -36,8 +38,7 @@ function fecha(v: unknown): Date | null {
 
 // YYYY-MM. Si el modelo devuelve cualquier otra cosa, el mes no existe y el
 // cierre quedaria colgado de un periodo fantasma.
-export const periodoValido = (v: unknown): v is string =>
-  typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+export { periodoValido } from './formato';
 
 export async function guardarStatement(usuarioId: string, fileId: string, data: StatementData) {
   if (!periodoValido(data.periodo)) {
@@ -81,16 +82,46 @@ export async function guardarSalary(usuarioId: string, fileId: string, data: Sal
     .filter(r => periodoValido(r?.periodo));
 
   for (const r of recibos) {
+    const valores = {
+      netoArs: String(num(r.netoArs)),
+      // Un recibo argentino casi nunca discrimina la parte en dolares: si el
+      // modelo no la vio, es 0. Pero ese 0 no puede pisar el que cargo una
+      // persona a mano, y por eso el update no toca las filas corregidas.
+      netoUsd: String(num(r.netoUsd)),
+      fileId,
+    };
     await db.insert(salaries)
-      .values({ usuarioId, periodo: r.periodo, netoArs: String(num(r.netoArs)), fileId })
+      .values({ usuarioId, periodo: r.periodo, ...valores })
       .onConflictDoUpdate({
         target: [salaries.usuarioId, salaries.periodo],
-        set: { netoArs: String(num(r.netoArs)), fileId },
+        set: valores,
+        // Lo que escribio una persona mirando su banco vale mas que lo que
+        // dedujo un modelo mirando un PDF. Sin esto, cargar el sueldo a mano
+        // duraria hasta la proxima sincronizacion de Drive.
+        setWhere: eq(salaries.corregido, false),
       });
   }
   return { cantidad: recibos.length, periodos: recibos.map(r => r.periodo) };
 }
 
+
+/**
+ * El sueldo cargado a mano, en las dos monedas.
+ *
+ * Queda marcado `corregido`, y eso es lo que impide que el proximo sync de
+ * Drive lea el recibo y sobrescriba con el neto en pesos solo, borrando la
+ * parte en dolares que ningun PDF trae.
+ *
+ * El `fileId` es el documento de origen; aca no hay documento, asi que se usa
+ * `manual:<periodo>`, que no puede chocar con un id de Drive ni con el
+ * `upload:<hash>` de un archivo subido.
+ */
+export async function guardarSueldoManual(usuarioId: string, s: Sueldo) {
+  const valores = { netoArs: String(s.netoArs), netoUsd: String(s.netoUsd), corregido: true };
+  await db.insert(salaries)
+    .values({ usuarioId, periodo: s.periodo, fileId: `manual:${s.periodo}`, ...valores })
+    .onConflictDoUpdate({ target: [salaries.usuarioId, salaries.periodo], set: valores });
+}
 
 
 /**

@@ -47,10 +47,12 @@ export async function primerosPasos(usuarioId: string): Promise<Arranque> {
   const pasos: Paso[] = [
     {
       id: 'ingreso',
-      titulo: 'Cargá un ingreso',
-      detalle: 'Subí un recibo de sueldo, o anotá cuánto entró. Sin esto no hay tasa de ahorro: ' +
-        'la app puede decirte cuánto gastaste, pero no si te alcanzó.',
-      href: '/',
+      titulo: 'Cargá tu sueldo',
+      detalle: 'Subí el recibo, o cargalo a mano en las dos monedas si cobrás parte en dólares. ' +
+        'Sin esto no hay tasa de ahorro: la app puede decirte cuánto gastaste, pero no si te alcanzó.',
+      // Apunta a donde esta el formulario, no al cierre: el paso decia "anotá
+      // cuánto entró" y mandaba a una pantalla donde eso no se podia hacer.
+      href: '/gastos',
       hecho: sueldos > 0,
     },
     {

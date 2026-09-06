@@ -211,6 +211,14 @@ section > h2 {
    el ancho completo, que ademas hace los botones mas faciles de tocar. */
 .fila-fiado .fiado-acciones { text-align: right; }
 
+/* El sueldo bimonetario trae dos montos y un boton del lado derecho, que juntos
+   no bajan de ~340px. En un telefono eso deja al titulo con ancho cero y
+   `overflow-wrap: anywhere` lo parte letra por letra, en vertical. Apilado se
+   lee bien y no hay nada que apretar. */
+@media (max-width: 560px) {
+  .fila-sueldo { flex-direction: column; align-items: stretch; gap: 8px; }
+}
+
 @media (max-width: 560px) {
   .fila-fiado { flex-direction: column; align-items: stretch; gap: 8px; }
   .fila-fiado .fiado-acciones {

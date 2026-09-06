@@ -8,7 +8,7 @@ const { Text } = Typography;
 
 export type Item = {
   id: string;
-  entidad: 'gasto' | 'consumo' | 'sueldo';
+  entidad: 'gasto' | 'consumo';
   descripcion: string;
   categoria: string | null;
   monto: number;
@@ -49,11 +49,9 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(
-      item.entidad === 'sueldo'
-        ? { entidad: 'sueldo', id: item.id, netoArs: monto }
-        : item.entidad === 'gasto'
-          ? { entidad: 'gasto', id: item.id, concepto: descripcion, categoria, montoArs: monto }
-          : { entidad: 'consumo', id: item.id, comercio: descripcion, categoria, montoArs: monto },
+      item.entidad === 'gasto'
+        ? { entidad: 'gasto', id: item.id, concepto: descripcion, categoria, montoArs: monto }
+        : { entidad: 'consumo', id: item.id, comercio: descripcion, categoria, montoArs: monto },
     ),
   });
 
@@ -84,12 +82,8 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
     <div style={{ padding: '10px 0', borderBottom: '1px dotted var(--linea)' }}>
       <Space direction="vertical" size="small" style={{ width: '100%' }}>
         <Space wrap>
-          {item.entidad !== 'sueldo' && (
-            <>
-              <Input value={descripcion} onChange={e => setDescripcion(e.target.value)} style={{ minWidth: 200 }} />
-              <Select value={categoria} onChange={setCategoria} options={OPCIONES} style={{ width: 200 }} />
-            </>
-          )}
+          <Input value={descripcion} onChange={e => setDescripcion(e.target.value)} style={{ minWidth: 200 }} />
+          <Select value={categoria} onChange={setCategoria} options={OPCIONES} style={{ width: 200 }} />
           <InputNumber value={monto} onChange={setMonto} min={0} style={{ width: 160 }} prefix="$" />
         </Space>
         <Space wrap>

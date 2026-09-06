@@ -7,6 +7,8 @@
  * fila por cuota se desincronizaria en cuanto se corrija el monto o la fecha.
  */
 
+import { PERIODO } from './formato';
+
 export type Prestamo = {
   id: string;
   nombre: string;
@@ -20,7 +22,6 @@ export type Prestamo = {
   canceladoEn: string | null;   // YYYY-MM desde el cual deja de pagarse
 };
 
-export const PERIODO = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** Meses entre dos periodos YYYY-MM. Negativo si el segundo es anterior. */
 export function mesesEntre(desde: string, hasta: string): number {

@@ -58,6 +58,50 @@ Cuando hay dolares y **no** hay tipo de cambio, el total es `null`, no la parte
 en pesos sola. Mostrar 300.000 cuando ademas hay USD 1.000 sin convertir es peor
 que mostrar "—": el numero parece completo y no lo esta.
 
+## El sueldo se puede cargar a mano
+
+El neto entraba **solo** por el recibo, y el clasificador solo lee la parte en
+pesos: un recibo argentino liquida en pesos y la parte en dolares se cobra por
+fuera. Con eso, quien cobra partido no podia cargar su ingreso real, y sin
+ingreso no hay tasa de ahorro ni estimacion del mes que viene.
+
+`PUT /api/sueldo` carga las dos partes. El `file_id` es `manual:<periodo>`,
+que no puede chocar con un id de Drive ni con el `upload:<hash>` de un archivo
+subido, y la fila queda con `corregido = true`.
+
+**Esa marca es la que protege el dato.** El upsert de `guardarSalary` lleva
+`setWhere: eq(salaries.corregido, false)`: el sync de Drive vuelve a leer el
+recibo todos los dias, y sin eso escribiria el neto en pesos solo, borrando la
+parte en dolares. Lo que escribio una persona mirando su banco le gana a lo que
+dedujo un modelo mirando un PDF.
+
+Hay **una sola puerta** para editar el sueldo. La rama `entidad: 'sueldo'` de
+`/api/rectificar` se elimino: solo escribia pesos, asi que corregir por ahi
+borraba los dolares.
+
+El formulario no tiene campo libre de fecha. Ofrece los dos meses que el cierre
+mira —el del mes y el anterior, porque el sueldo de un mes paga la tarjeta del
+siguiente— y nada mas: cargar el sueldo en un mes que ningun cierre lee es
+escribir un dato que despues no aparece.
+
+## Es una app argentina
+
+No es una app de finanzas que ademas soporta Argentina: **es argentina**, y
+recien despues, tal vez, otra cosa. Eso decide cosas concretas y no hay que
+volver a discutirlas:
+
+- El peso es la moneda en la que se consolida todo. El dolar es la **segunda
+  moneda de un argentino**, no una moneda generica: por eso hay dos columnas y
+  no una tabla de monedas.
+- Los formatos son es-AR (1.350.000,00), y los montos se escriben con puntos de
+  miles tambien en los campos de carga.
+- La percepcion RG 5617 del 30%, el CFT de las cuotas y los ratios de CEDEAR
+  estan tejidos en la logica, no en las etiquetas.
+
+Generalizar esto a otros paises no es agregar un selector de moneda: es otro
+proyecto. Hasta que alguien lo pida, la respuesta a "¿y si el usuario es de
+otro lado?" es **todavia no**.
+
 ## Pagado y pendiente
 
 Cargar un gasto y pagarlo son dos momentos distintos. Pero lo pendiente **no

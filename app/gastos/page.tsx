@@ -15,6 +15,7 @@ import Prestamos from './prestamos';
 import Fiado from './fiado';
 import Pendientes from './pendientes';
 import Categorias from './categorias';
+import SueldoManual from './sueldo';
 import Editor, { type Item } from './editor';
 import { leerCategorias } from '@/lib/categorias';
 import { idUsuarioActual } from '@/lib/usuario';
@@ -36,6 +37,8 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   let prestamos: Prestamo[] = [];
   let fiados: PrestamoPersonal[] = [];
   let pagos: EstadoDePagos = { pendientes: [], pagados: 0, faltaPagarArs: 0 };
+  let tc: number | null = null;
+  let anterior = '';
 
   async function cargarStatements(p: string) {
     return db.query.statements.findMany({
@@ -74,12 +77,31 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
       // cargarlo: si no, la unica forma de llegar a esta seccion seria subir
       // primero un comprobante que no tiene nada que ver.
       const mesActual = new Date().toISOString().slice(0, 7);
+      const [ya, ma] = mesActual.split('-').map(Number);
+      const mesPrevio = `${ma === 1 ? ya - 1 : ya}-${String(ma === 1 ? 12 : ma - 1).padStart(2, '0')}`;
+      const sueldoInicial = await db.query.salaries.findFirst({
+        where: and(eq(salaries.usuarioId, usuarioId), inArray(salaries.periodo, [mesPrevio, mesActual])),
+        orderBy: desc(salaries.periodo),
+      });
       return (
         <main>
           <Nav />
           <p className="eyebrow">Gastos</p>
           <h1>Sin gastos cargados</h1>
           <p>Subí un comprobante desde el cierre, o anotá uno acá abajo.</p>
+          {/* El sueldo va primero aunque no haya un solo gasto: sin ingreso no
+              hay tasa de ahorro, y es lo primero que alguien quiere ver. */}
+          <SueldoManual
+            periodo={mesActual}
+            anterior={mesPrevio}
+            tipoCambio={await tipoCambioDelMes(usuarioId, mesActual, null)}
+            actual={sueldoInicial ? {
+              periodo: sueldoInicial.periodo,
+              netoArs: Number(sueldoInicial.netoArs),
+              netoUsd: Number(sueldoInicial.netoUsd),
+              corregido: sueldoInicial.corregido,
+            } : null}
+          />
           <GastoTexto />
           <Prestamos prestamos={await cargarPrestamos(usuarioId)} periodo={mesActual} />
           <Fiado prestamos={await cargarFiados()} hoy={hoyISO} />
@@ -88,7 +110,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
     }
 
     const [y, m] = periodo.split('-').map(Number);
-    const anterior = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
+    anterior = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
 
     [sts, sueltos, sueldo, prestamos, fiados] = await Promise.all([
       cargarStatements(periodo),
@@ -102,8 +124,9 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
     ]);
 
     // Lo pendiente se mira en pesos: para eso hace falta el tipo de cambio del
-    // mes, el mismo que usa el cierre.
-    pagos = await estadoDePagos(usuarioId, periodo, await tipoCambioDelMes(usuarioId, periodo, null));
+    // mes, el mismo que usa el cierre. El sueldo bimonetario usa el mismo.
+    tc = await tipoCambioDelMes(usuarioId, periodo, null);
+    pagos = await estadoDePagos(usuarioId, periodo, tc);
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;
@@ -171,19 +194,17 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
           : <p className="resultado">Todavía no hay gastos fuera de la tarjeta en este mes.</p>}
       </section>
 
-      {sueldo && (
-        <section>
-          <h2>Sueldo que paga este cierre</h2>
-          <Editor
-            categorias={categorias}
-            item={{
-              id: sueldo.id, entidad: 'sueldo',
-              descripcion: `Neto de ${fmtPeriodo(sueldo.periodo)}`,
-              categoria: null, monto: Number(sueldo.netoArs), corregido: sueldo.corregido,
-            }}
-          />
-        </section>
-      )}
+      <SueldoManual
+        periodo={periodo}
+        anterior={anterior}
+        tipoCambio={tc}
+        actual={sueldo ? {
+          periodo: sueldo.periodo,
+          netoArs: Number(sueldo.netoArs),
+          netoUsd: Number(sueldo.netoUsd),
+          corregido: sueldo.corregido,
+        } : null}
+      />
 
       {itemsConsumos.length > 0 && (
         <section>

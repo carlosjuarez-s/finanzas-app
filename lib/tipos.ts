@@ -12,7 +12,7 @@ export type StatementData = {
   consumos: { fecha: string; comercio: string; categoria: string; cuota: string | null; montoArs: number; montoUsd: number }[];
 };
 
-export type SalaryData = { recibos: { periodo: string; netoArs: number }[] };
+export type SalaryData = { recibos: { periodo: string; netoArs: number; netoUsd?: number }[] };
 
 // Lo que el upload reporta por archivo. Vive aca y no en la ruta para que el
 // componente de cliente lo importe sin arrastrar el modulo del servidor.

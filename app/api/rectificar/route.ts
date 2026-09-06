@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { gastos, consumos, salaries, statements } from '@/db/schema';
-import { guardarCierres, periodoSiguiente } from '@/lib/cierre';
+import { gastos, consumos, statements } from '@/db/schema';
+import { guardarCierres } from '@/lib/cierre';
 import { leerCategorias, encajar } from '@/lib/categorias';
 import { mensajeDeError } from '@/lib/errores';
 import { idUsuarioActual } from '@/lib/usuario';
@@ -78,21 +78,6 @@ export async function PATCH(req: NextRequest) {
       // "TOTAL A PAGAR" del PDF: solo se mueve el desglose por categoria.
       const st = padre;
       if (st) await recalcular(usuarioId, [st.periodo]);
-      return NextResponse.json({ ok: true });
-    }
-
-    if (entidad === 'sueldo') {
-      const neto = numero(body.netoArs);
-      if (neto === null) return NextResponse.json({ error: 'El neto tiene que ser un numero mayor o igual a cero.' }, { status: 400 });
-
-      const [fila] = await db.update(salaries)
-        .set({ netoArs: String(neto), corregido: true })
-        .where(eq(salaries.id, id))
-        .returning({ periodo: salaries.periodo });
-
-      if (!fila) return NextResponse.json({ error: 'No se encontro ese recibo.' }, { status: 404 });
-      // El sueldo de un mes paga los consumos del siguiente: dos cierres cambian.
-      await recalcular(usuarioId, [fila.periodo, periodoSiguiente(fila.periodo)]);
       return NextResponse.json({ ok: true });
     }
 

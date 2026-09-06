@@ -9,6 +9,7 @@ import { totalDelMes, estado as estadoPrestamo } from './prestamos';
 import { resumir, type PrestamoPersonal } from './fiado';
 import { cargarPrestamos } from './cierre';
 import { redactarProfundo } from './pii';
+import { PERIODO } from './formato';
 
 /**
  * Consultas de solo lectura sobre las finanzas.
@@ -25,7 +26,7 @@ import { redactarProfundo } from './pii';
  * - **Sin PII.** Todo lo que sale pasa por `redactarProfundo`.
  */
 
-const PERIODO = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 
 function validarPeriodo(p: string): string {
   if (!PERIODO.test(p)) throw new Error(`El periodo tiene que ser YYYY-MM (vino "${p}").`);

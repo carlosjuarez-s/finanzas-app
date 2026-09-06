@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { prestamos } from '@/db/schema';
 import { guardarCierres } from '@/lib/cierre';
-import { PERIODO } from '@/lib/prestamos';
+import { PERIODO } from '@/lib/formato';
 import { mensajeDeError } from '@/lib/errores';
 import { idUsuarioActual } from '@/lib/usuario';
 

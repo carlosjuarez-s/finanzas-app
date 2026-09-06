@@ -81,9 +81,11 @@ Reglas criticas:
 - Verifica que la suma de consumos ARS cuadre con el subtotal del resumen; si hay diferencia agrega un consumo "Ajuste/redondeo".
 - Los montos usan formato argentino en el PDF (1.234,56): convertirlos a number estandar.`;
 
-export const SALARY_SPEC = `{ "recibos": [{ "periodo": "YYYY-MM", "netoArs": number }] }
+export const SALARY_SPEC = `{ "recibos": [{ "periodo": "YYYY-MM", "netoArs": number, "netoUsd": number }] }
 
-"periodo" sale del campo PERIODO DE PAGO. "netoArs" es el Neto Percibido. Un PDF puede traer varios recibos: devolvelos todos. Ignorar CUIL, legajo y direccion.`;
+"periodo" sale del campo PERIODO DE PAGO. "netoArs" es el Neto Percibido en pesos. Un PDF puede traer varios recibos: devolvelos todos. Ignorar CUIL, legajo y direccion.
+
+"netoUsd" es la parte cobrada en dolares, y casi siempre es 0: el recibo argentino liquida en pesos. Ponelo distinto de cero SOLO si el recibo muestra explicitamente un importe en USD (un concepto con "U$S", "USD" o "dolares" en la descripcion, o una columna aparte en esa moneda). NO conviertas el neto en pesos a dolares, y no deduzcas la parte en dolares de un concepto que diga "equivalente" o "referencia": ahi el importe ya esta contado en el neto en pesos y cargarlo otra vez duplicaria el sueldo del mes.`;
 
 export const PORTFOLIO_SPEC = `{
   "plataforma": "BINANCE" | "IOL" | string,
