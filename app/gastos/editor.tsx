@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, InputNumber, Select, Space, Popconfirm, Typography, Tag } from 'antd';
-import { CATEGORIAS } from '@/lib/prompts';
 
 const { Text } = Typography;
 
@@ -17,9 +16,11 @@ export type Item = {
   corregido: boolean;
 };
 
-const OPCIONES = CATEGORIAS.map(c => ({ value: c, label: c }));
 
-export default function Editor({ item }: { item: Item }) {
+// Las categorias llegan como prop desde el server: son del usuario, no una
+// lista fija que el cliente pueda conocer sola.
+export default function Editor({ item, categorias }: { item: Item; categorias: string[] }) {
+  const OPCIONES = categorias.map(c => ({ value: c, label: c }));
   const [editando, setEditando] = useState(false);
   const [descripcion, setDescripcion] = useState(item.descripcion);
   const [categoria, setCategoria] = useState(item.categoria ?? 'Otros');

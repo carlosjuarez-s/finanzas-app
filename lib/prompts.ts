@@ -1,12 +1,15 @@
 // Prompts de extraccion — portados del skill "cierre-financiero".
 // Son la spec funcional validada contra resumenes reales de Master y Visa.
 
-export const CATEGORIAS = [
-  'Suscripciones', 'Servicios', 'Salud y deporte', 'Supermercado y comida',
-  'Compras y hogar', 'Cuotas', 'Comisiones bancarias', 'Impuestos y percepciones',
-  // Gastos que no pasan por la tarjeta y antes no tenian donde caer.
-  'Alquiler', 'Transporte', 'Educacion', 'Otros',
-] as const;
+// Las categorias ya no viven aca: son de cada usuario y se leen de la base
+// (lib/categorias.ts). Los prompts se arman con SU lista, porque decirle al
+// modelo que elija entre categorias que esa persona no usa produce exactamente
+// las clasificaciones que despues hay que corregir a mano.
+//
+// Por eso todo lo que menciona categorias es una funcion y no una constante.
+import { CATEGORIAS_INICIALES } from './categorias';
+
+const listar = (cats: string[]) => (cats.length ? cats : [...CATEGORIAS_INICIALES]).join(', ');
 
 // Una compra en cuotas NO es un gasto de este mes: es un compromiso repartido
 // en varios. Tiene la misma forma que un prestamo —cuantas cuotas, de cuanto,
@@ -30,11 +33,11 @@ Reglas:
 
 // Esquema de un gasto suelto: boleta de servicio, alquiler, o cualquier
 // comprobante informal fotografiado.
-export const GASTO_SPEC = `{
+export const gastoSpec = (cats: string[]) => `{
   "periodo": "YYYY-MM",             // mes al que corresponde el gasto
   "fecha": "YYYY-MM-DD" | null,     // si el comprobante la muestra
   "concepto": string,               // "Luz - EDET", "Alquiler septiembre", "Internet Fibertel"
-  "categoria": string,              // una de: ${CATEGORIAS.join(', ')}
+  "categoria": string,              // una de: ${listar(cats)}
   "montoArs": number,
   "montoUsd": number                // 0 salvo que el comprobante este en dolares
 }
@@ -50,7 +53,7 @@ Reglas:
 // Los esquemas viven aparte del encabezado para que el clasificador
 // (CLASSIFY_SYSTEM) reuse exactamente las mismas reglas validadas y no haya dos
 // versiones de la logica de categorizacion conviviendo.
-export const STATEMENT_SPEC = `{
+export const statementSpec = (cats: string[]) => `{
   "card": "MASTER" | "VISA",
   "periodo": "YYYY-MM",            // mes del vencimiento del resumen
   "vencimiento": "YYYY-MM-DD",
@@ -61,7 +64,7 @@ export const STATEMENT_SPEC = `{
   "consumos": [{
     "fecha": "YYYY-MM-DD",
     "comercio": string,             // limpio, sin codigos de comprobante
-    "categoria": string,            // una de: ${CATEGORIAS.join(', ')}
+    "categoria": string,            // una de: ${listar(cats)}
     "cuota": string | null,         // "08/09" si es cuota, null si no
     "montoArs": number,
     "montoUsd": number
@@ -98,9 +101,9 @@ export const PORTFOLIO_SPEC = `{
 No inventes cotizaciones: si una posicion no muestra valuacion, deja valorUsd/valorArs en null. No mezcles variaciones porcentuales con valores absolutos.`;
 
 // Prompts de un solo tipo: los usa el sync, que ya sabe que hay en cada carpeta.
-export const STATEMENT_SYSTEM = `Sos un extractor de datos de resumenes de tarjeta de credito argentinos (Mastercard/Visa de bancos locales). Recibis el PDF y devolves SOLO un JSON valido, sin markdown ni texto extra, con esta forma exacta:
+export const statementSystem = (cats: string[]) => `Sos un extractor de datos de resumenes de tarjeta de credito argentinos (Mastercard/Visa de bancos locales). Recibis el PDF y devolves SOLO un JSON valido, sin markdown ni texto extra, con esta forma exacta:
 
-${STATEMENT_SPEC}`;
+${statementSpec(cats)}`;
 
 export const SALARY_SYSTEM = `Sos un extractor de recibos de sueldo argentinos (Sistemas Globales S.A. / Globant). Recibis el PDF y devolves SOLO JSON valido:
 
@@ -112,7 +115,7 @@ ${PORTFOLIO_SPEC}`;
 
 // Prompt del upload manual: el archivo llega sin contexto, asi que el modelo
 // decide primero que es y despues extrae con el esquema que corresponda.
-export const CLASSIFY_SYSTEM = `Sos un clasificador y extractor de documentos financieros argentinos. Recibis un documento (PDF o imagen) sin ningun contexto previo y devolves SOLO un JSON valido, sin markdown, con esta forma:
+export const classifySystem = (cats: string[]) => `Sos un clasificador y extractor de documentos financieros argentinos. Recibis un documento (PDF o imagen) sin ningun contexto previo y devolves SOLO un JSON valido, sin markdown, con esta forma:
 
 { "tipo": "STATEMENT" | "SALARY" | "PORTFOLIO" | "DESCONOCIDO", "datos": { ... } }
 
@@ -132,13 +135,13 @@ Si tipo es DESCONOCIDO, "datos" es { "motivo": "<una frase explicando que es el 
 En los demas casos "datos" respeta exactamente el esquema de su tipo:
 
 ## tipo = STATEMENT
-${STATEMENT_SPEC}
+${statementSpec(cats)}
 
 ## tipo = SALARY
 ${SALARY_SPEC}
 
 ## tipo = GASTO
-${GASTO_SPEC}
+${gastoSpec(cats)}
 
 ## tipo = PORTFOLIO
 ${PORTFOLIO_SPEC}`;
@@ -168,7 +171,7 @@ Reglas:
 // Clasificador para archivos de TEXTO (CSV, TXT). A diferencia de un PDF, acá el
 // contenido se puede leer y censurar antes de mandarlo, asi que la redaccion de
 // datos personales protege de verdad.
-export const CLASIFICAR_TEXTO_SYSTEM = `Sos un clasificador de archivos financieros en texto plano (CSV, TXT, exports de brokers). Devolves SOLO JSON valido, sin markdown:
+export const clasificarTextoSystem = (cats: string[]) => `Sos un clasificador de archivos financieros en texto plano (CSV, TXT, exports de brokers). Devolves SOLO JSON valido, sin markdown:
 
 { "tipo": "MOVIMIENTOS" | "GASTO" | "DESCONOCIDO", "datos": { ... } }
 
@@ -185,7 +188,7 @@ Si tipo es DESCONOCIDO, "datos" es { "motivo": "<que es el archivo o por que no 
 ${MOVIMIENTOS_SPEC}
 
 ## tipo = GASTO
-${GASTO_SPEC}`;
+${gastoSpec(cats)}`;
 
 // Analisis de la situacion financiera.
 //
@@ -220,7 +223,7 @@ Sobre el tono: nada de "es importante destacar" ni "recorda siempre". Si algo es
 
 // Carga por texto: "pague 85000 de alquiler en septiembre". El texto ya viene
 // redactado de datos personales antes de llegar al modelo.
-export const TEXTO_SYSTEM = `Interpretas una descripcion escrita a mano alzada y devolves SOLO JSON valido, sin markdown:
+export const textoSystem = (cats: string[]) => `Interpretas una descripcion escrita a mano alzada y devolves SOLO JSON valido, sin markdown:
 
 { "tipo": "GASTO" | "CUOTAS" | "DESCONOCIDO", "datos": { ... } }
 
@@ -237,7 +240,7 @@ ${CUOTAS_SPEC}
 
 Si tipo es GASTO, "datos" respeta:
 
-${GASTO_SPEC}
+${gastoSpec(cats)}
 
 Reglas propias del texto libre:
 - Los montos pueden venir informales: "85 lucas" y "85 mil" son 85000; "1,2 palos" son 1200000.

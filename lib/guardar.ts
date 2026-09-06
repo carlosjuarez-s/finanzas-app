@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, consumos, salaries, portfolioSnapshots, positions, gastos, transacciones, prestamos } from '@/db/schema';
-import { CATEGORIAS } from './prompts';
+import { leerCategorias, encajar } from './categorias';
 import type { StatementData, SalaryData, PortfolioData, GastoData, MovimientoData, CuotasData } from './tipos';
 
 // Insercion compartida entre el sync de Drive y el upload manual. El fileId es
@@ -91,12 +91,7 @@ export async function guardarSalary(usuarioId: string, fileId: string, data: Sal
   return { cantidad: recibos.length, periodos: recibos.map(r => r.periodo) };
 }
 
-// El modelo puede devolver una categoria que no esta en la lista: se acepta como
-// "Otros" en vez de rechazar el gasto, y despues se corrige a mano.
-const categoriaValida = (v: unknown): string => {
-  const c = texto(v, 'Otros');
-  return (CATEGORIAS as readonly string[]).includes(c) ? c : 'Otros';
-};
+
 
 /**
  * Movimientos de un export de broker o de la API. Devuelve cuantos entraron y
@@ -162,13 +157,18 @@ export async function guardarGasto(
     throw new Error('No se pudo leer un importe mayor a cero en el comprobante.');
   }
 
+  // El modelo puede devolver una categoria que no existe o escrita distinto:
+  // encajar() la compara contra las del usuario sin mayusculas ni acentos, y
+  // cae en "Otros" antes que rechazar el gasto entero.
+  const categorias = await leerCategorias(usuarioId);
+
   const [g] = await db.insert(gastos).values({
     usuarioId,
     fileId,
     periodo: data.periodo,
     fecha: typeof data.fecha === 'string' && data.fecha.trim() ? data.fecha.trim() : null,
     concepto: texto(data.concepto, 'Gasto sin descripcion'),
-    categoria: categoriaValida(data.categoria),
+    categoria: encajar(data.categoria, categorias),
     montoArs: String(monto),
     montoUsd: String(num(data.montoUsd)),
     origen,

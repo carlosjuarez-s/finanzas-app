@@ -14,7 +14,9 @@ import BarChart from '../bar-chart';
 import Prestamos from './prestamos';
 import Fiado from './fiado';
 import Pendientes from './pendientes';
+import Categorias from './categorias';
 import Editor, { type Item } from './editor';
+import { leerCategorias } from '@/lib/categorias';
 import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +27,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   // La fecha la fija el servidor: si la calculara el cliente, dos telefonos en
   // zonas distintas mostrarian "hace 7 meses" y "hace 8" para el mismo prestamo.
   const hoyISO = new Date().toISOString().slice(0, 10);
+  const categorias = await leerCategorias(usuarioId);
 
   let periodo: string | undefined;
   let sueltos: typeof gastos.$inferSelect[] = [];
@@ -156,13 +159,15 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
 
       <Fiado prestamos={fiados} hoy={hoyISO} />
 
+      <Categorias categorias={categorias} />
+
       <section>
         <h2>
           Servicios, alquiler y otros
           <span className="chip">{fmtArs(itemsGastos.reduce((s, i) => s + i.monto, 0))}</span>
         </h2>
         {itemsGastos.length
-          ? itemsGastos.map(i => <Editor key={i.id} item={i} />)
+          ? itemsGastos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)
           : <p className="resultado">Todavía no hay gastos fuera de la tarjeta en este mes.</p>}
       </section>
 
@@ -170,6 +175,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
         <section>
           <h2>Sueldo que paga este cierre</h2>
           <Editor
+            categorias={categorias}
             item={{
               id: sueldo.id, entidad: 'sueldo',
               descripcion: `Neto de ${fmtPeriodo(sueldo.periodo)}`,
@@ -186,7 +192,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
             Corregir una línea reacomoda el desglose por categoría. El total del mes sigue
             saliendo del «TOTAL A PAGAR» del resumen, que es el número que efectivamente pagás.
           </p>
-          {itemsConsumos.map(i => <Editor key={i.id} item={i} />)}
+          {itemsConsumos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)}
         </section>
       )}
     </main>

@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { gastos, consumos, salaries, statements } from '@/db/schema';
 import { guardarCierres, periodoSiguiente } from '@/lib/cierre';
-import { CATEGORIAS } from '@/lib/prompts';
+import { leerCategorias, encajar } from '@/lib/categorias';
 import { mensajeDeError } from '@/lib/errores';
 import { idUsuarioActual } from '@/lib/usuario';
 
@@ -34,8 +34,8 @@ export async function PATCH(req: NextRequest) {
       const monto = numero(body.montoArs);
       if (monto === null) return NextResponse.json({ error: 'El monto tiene que ser un numero mayor o igual a cero.' }, { status: 400 });
 
-      const categoria = typeof body.categoria === 'string' && (CATEGORIAS as readonly string[]).includes(body.categoria)
-        ? body.categoria : 'Otros';
+      // La categoria se valida contra las del usuario, no contra una lista fija.
+      const categoria = encajar(body.categoria, await leerCategorias(usuarioId));
 
       const [fila] = await db.update(gastos)
         .set({
@@ -54,8 +54,8 @@ export async function PATCH(req: NextRequest) {
       const monto = numero(body.montoArs);
       if (monto === null) return NextResponse.json({ error: 'El monto tiene que ser un numero mayor o igual a cero.' }, { status: 400 });
 
-      const categoria = typeof body.categoria === 'string' && (CATEGORIAS as readonly string[]).includes(body.categoria)
-        ? body.categoria : 'Otros';
+      // La categoria se valida contra las del usuario, no contra una lista fija.
+      const categoria = encajar(body.categoria, await leerCategorias(usuarioId));
 
       // `consumos` no tiene dueño propio: cuelga de su statement. Se verifica
       // el padre ANTES de escribir, porque un update que solo filtra por id

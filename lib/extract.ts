@@ -1,7 +1,8 @@
 import {
-  STATEMENT_SYSTEM, SALARY_SYSTEM, PORTFOLIO_SYSTEM, CLASSIFY_SYSTEM, TEXTO_SYSTEM,
-  CLASIFICAR_TEXTO_SYSTEM,
+  statementSystem, SALARY_SYSTEM, PORTFOLIO_SYSTEM, classifySystem, textoSystem,
+  clasificarTextoSystem,
 } from './prompts';
+import { leerCategorias } from './categorias';
 import { anthropicConfigurado, anthropicGenerar, anthropicSinCredito } from './anthropic';
 import { geminiConfigurado, geminiGenerar } from './gemini';
 import { redactar, redactarProfundo } from './pii';
@@ -46,8 +47,10 @@ async function generar(system: string, docs: Documento[], texto?: string): Promi
 
 const pdf = (base64: string): Documento[] => [{ base64, mediaType: 'application/pdf' }];
 
-export const extractStatement = async (b64: string) =>
-  parseJson<StatementData>(await generar(STATEMENT_SYSTEM, pdf(b64)));
+export const extractStatement = async (usuarioId: string, b64: string) =>
+  parseJson<StatementData>(
+    await generar(statementSystem(await leerCategorias(usuarioId)), pdf(b64)),
+  );
 
 export const extractSalary = async (b64: string) =>
   parseJson<SalaryData>(await generar(SALARY_SYSTEM, pdf(b64)));
@@ -61,8 +64,10 @@ export const extractPortfolio = async (images: Documento[]) =>
 // Lo que vuelve se redacta antes de que lo vea el resto de la app: es lo que
 // termina archivado en la columna `raw`, y ahi es donde quedan el CUIL y el
 // legajo de un recibo si nadie los saca.
-export const clasificarDocumento = async (doc: Documento) =>
-  redactarProfundo(parseJson<DocumentoClasificado>(await generar(CLASSIFY_SYSTEM, [doc])));
+export const clasificarDocumento = async (usuarioId: string, doc: Documento) =>
+  redactarProfundo(parseJson<DocumentoClasificado>(
+    await generar(classifySystem(await leerCategorias(usuarioId)), [doc]),
+  ));
 
 // Limite del contenido de un archivo de texto. Un export de años enteros puede
 // tener decenas de miles de filas: se cobra por token y ademas no entra en la
@@ -74,10 +79,13 @@ export const MAX_CARACTERES_TEXTO = 120_000;
  * redaccion de datos personales SI protege: el texto se limpia antes de salir
  * hacia el proveedor.
  */
-export async function clasificarArchivoTexto(contenido: string) {
+export async function clasificarArchivoTexto(usuarioId: string, contenido: string) {
   const { texto, hallazgos } = redactar(contenido);
   const resultado = parseJson<ArchivoTextoClasificado>(
-    await generar(CLASIFICAR_TEXTO_SYSTEM, [], `Contenido del archivo:\n${texto}`),
+    await generar(
+      clasificarTextoSystem(await leerCategorias(usuarioId)), [],
+      `Contenido del archivo:\n${texto}`,
+    ),
   );
   return { resultado: redactarProfundo(resultado), hallazgos };
 }
@@ -89,10 +97,10 @@ export const generarAnalisis = async <T>(system: string, datos: string): Promise
 
 // Carga por descripcion escrita. Aca la redaccion SI protege de verdad: el texto
 // se limpia antes de salir hacia el proveedor, no despues.
-export async function interpretarTexto(descripcion: string) {
+export async function interpretarTexto(usuarioId: string, descripcion: string) {
   const { texto, hallazgos } = redactar(descripcion);
   const hoy = new Date().toISOString().slice(0, 10);
-  const system = TEXTO_SYSTEM.replace('{HOY}', hoy);
+  const system = textoSystem(await leerCategorias(usuarioId)).replace('{HOY}', hoy);
   const salida = parseJson<TextoClasificado>(
     await generar(system, [], `Gasto a interpretar:\n${texto}`),
   );

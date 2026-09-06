@@ -63,7 +63,7 @@ export async function runSync(usuarioId: string): Promise<SyncResult> {
     for (const f of await listPdfs(tarjetasId)) {
       if (procesados.tarjetas.has(f.id!)) { result.skipped++; continue; }
       try {
-        await guardarStatement(usuarioId, f.id!, await extractStatement(await downloadBase64(f.id!)));
+        await guardarStatement(usuarioId, f.id!, await extractStatement(usuarioId, await downloadBase64(f.id!)));
         result.statements++;
       } catch (e) { result.errors.push(`${f.name}: ${e}`); }
     }

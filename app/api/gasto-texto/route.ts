@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { resultado, hallazgos } = await interpretarTexto(descripcion);
+    const { resultado, hallazgos } = await interpretarTexto(usuarioId, descripcion);
 
     // Una compra en cuotas no es un gasto de este mes: es un compromiso
     // repartido. Va al plan de cuotas y desde ahi suma a cada mes que toca.

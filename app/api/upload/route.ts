@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const { resultado, hallazgos } = await clasificarArchivoTexto(contenido);
+        const { resultado, hallazgos } = await clasificarArchivoTexto(usuarioId, contenido);
         const censurado = hallazgos.length ? ` · se censuro antes de enviar: ${hallazgos.join(', ')}` : '';
 
         if (resultado.tipo === 'MOVIMIENTOS') {
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const doc = await clasificarDocumento({ base64: buf.toString('base64'), mediaType: file.type });
+      const doc = await clasificarDocumento(usuarioId, { base64: buf.toString('base64'), mediaType: file.type });
 
       switch (doc.tipo) {
         case 'STATEMENT': {
