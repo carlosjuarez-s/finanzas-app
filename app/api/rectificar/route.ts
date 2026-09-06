@@ -32,7 +32,10 @@ export async function PATCH(req: NextRequest) {
   try {
     if (entidad === 'gasto') {
       const monto = numero(body.montoArs);
-      if (monto === null) return NextResponse.json({ error: 'El monto tiene que ser un numero mayor o igual a cero.' }, { status: 400 });
+      const usd = numero(body.montoUsd ?? 0);
+      if (monto === null || usd === null) return NextResponse.json({ error: 'El monto tiene que ser un numero mayor o igual a cero.' }, { status: 400 });
+      // Cero en las dos monedas no es un gasto de cero: es un gasto sin monto.
+      if (monto === 0 && usd === 0) return NextResponse.json({ error: 'Poné el monto en pesos, en dólares, o en las dos.' }, { status: 400 });
 
       // La categoria se valida contra las del usuario, no contra una lista fija.
       const categoria = encajar(body.categoria, await leerCategorias(usuarioId));
@@ -40,7 +43,7 @@ export async function PATCH(req: NextRequest) {
       const [fila] = await db.update(gastos)
         .set({
           concepto: String(body.concepto ?? '').trim() || 'Gasto sin descripcion',
-          categoria, montoArs: String(monto), corregido: true,
+          categoria, montoArs: String(monto), montoUsd: String(usd), corregido: true,
         })
         .where(eq(gastos.id, id))
         .returning({ periodo: gastos.periodo });
@@ -52,7 +55,9 @@ export async function PATCH(req: NextRequest) {
 
     if (entidad === 'consumo') {
       const monto = numero(body.montoArs);
-      if (monto === null) return NextResponse.json({ error: 'El monto tiene que ser un numero mayor o igual a cero.' }, { status: 400 });
+      const usd = numero(body.montoUsd ?? 0);
+      if (monto === null || usd === null) return NextResponse.json({ error: 'El monto tiene que ser un numero mayor o igual a cero.' }, { status: 400 });
+      if (monto === 0 && usd === 0) return NextResponse.json({ error: 'Poné el monto en pesos, en dólares, o en las dos.' }, { status: 400 });
 
       // La categoria se valida contra las del usuario, no contra una lista fija.
       const categoria = encajar(body.categoria, await leerCategorias(usuarioId));
@@ -70,7 +75,7 @@ export async function PATCH(req: NextRequest) {
       await db.update(consumos)
         .set({
           comercio: String(body.comercio ?? '').trim() || 'Sin identificar',
-          categoria, montoArs: String(monto), corregido: true,
+          categoria, montoArs: String(monto), montoUsd: String(usd), corregido: true,
         })
         .where(eq(consumos.id, id));
 

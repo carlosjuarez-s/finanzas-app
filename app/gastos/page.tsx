@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { statements, salaries, gastos, prestamosPersonales } from '@/db/schema';
 import { cargarPrestamos, tipoCambioDelMes } from '@/lib/cierre';
 import { estadoDePagos, type EstadoDePagos } from '@/lib/pagos';
+import { consolidar } from '@/lib/bimoneda';
 import { totalDelMes, type Prestamo } from '@/lib/prestamos';
 import type { PrestamoPersonal } from '@/lib/fiado';
 import { fmtArs, fmtPeriodo } from '@/lib/formato';
@@ -21,6 +22,12 @@ import { leerCategorias } from '@/lib/categorias';
 import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
+
+// Lo que vale un item en pesos, para ordenar. Sin tipo de cambio se ordena por
+// la parte en pesos: es lo unico que se sabe, y ordenar mal es mejor que
+// inventar una cotizacion.
+const enPesosItem = (i: Item, tc: number | null) =>
+  consolidar({ ars: i.monto, usd: i.montoUsd ?? 0 }, tc).totalArs ?? i.monto;
 
 export default async function Gastos({ searchParams }: { searchParams: Promise<{ periodo?: string }> }) {
   const usuarioId = await idUsuarioActual();
@@ -135,19 +142,28 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
 
   const itemsGastos: Item[] = sueltos.map(g => ({
     id: g.id, entidad: 'gasto', descripcion: g.concepto, categoria: g.categoria,
-    monto: Number(g.montoArs), origen: g.origen, corregido: g.corregido,
+    monto: Number(g.montoArs), montoUsd: Number(g.montoUsd),
+    origen: g.origen, corregido: g.corregido,
   }));
 
   const itemsConsumos: Item[] = sts.flatMap(st => st.consumos.map(c => ({
     id: c.id, entidad: 'consumo' as const, descripcion: c.comercio, categoria: c.categoria,
-    monto: Number(c.montoArs), origen: st.card, corregido: c.corregido,
-  }))).sort((a, b) => b.monto - a.monto);
+    monto: Number(c.montoArs), montoUsd: Number(c.montoUsd),
+    origen: st.card, corregido: c.corregido,
+  }))).sort((a, b) => enPesosItem(b, tc) - enPesosItem(a, tc));
 
   // Categorias del mes, juntando tarjeta y gastos sueltos: es la vista que
   // responde "en que se me va la plata", no de donde salio cada peso.
   const acum = new Map<string, number>();
+  // Un consumo en dolares vale lo que vale al cambio del mes. Sumando solo
+  // `montoArs`, una compra de USD 200 entraba al grafico como cero mientras el
+  // cierre la contaba: dos pantallas del mismo mes decian cosas distintas.
+  let sinConvertir = 0;
   for (const i of [...itemsGastos, ...itemsConsumos]) {
-    if (i.categoria) acum.set(i.categoria, (acum.get(i.categoria) ?? 0) + i.monto);
+    if (!i.categoria) continue;
+    const total = consolidar({ ars: i.monto, usd: i.montoUsd ?? 0 }, tc).totalArs;
+    if (total === null) { sinConvertir++; continue; }
+    acum.set(i.categoria, (acum.get(i.categoria) ?? 0) + total);
   }
   // La cuota no es un item cargado, sale del plan del prestamo: si no entra
   // acá, el grafico muestra menos gasto del que el cierre esta contando.
@@ -171,6 +187,13 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
         <section>
           <h2>Gasto del mes por categoría</h2>
           <BarChart datos={porCategoria} formato="ars" />
+          {sinConvertir > 0 && (
+            <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
+              {sinConvertir === 1 ? 'Un gasto en dólares no está' : `${sinConvertir} gastos en dólares no están`} en
+              este gráfico: falta el tipo de cambio del mes y no se pueden pasar a pesos.
+              Cargalo en Supuestos.
+            </p>
+          )}
         </section>
       )}
 

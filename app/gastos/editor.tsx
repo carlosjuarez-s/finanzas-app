@@ -12,6 +12,9 @@ export type Item = {
   descripcion: string;
   categoria: string | null;
   monto: number;
+  /** La parte en dolares, si la hay. Un gasto puede venir entero en USD:
+   *  mostrando solo la parte en pesos figuraba como $ 0. */
+  montoUsd?: number;
   origen?: string | null;
   corregido: boolean;
 };
@@ -25,6 +28,7 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
   const [descripcion, setDescripcion] = useState(item.descripcion);
   const [categoria, setCategoria] = useState(item.categoria ?? 'Otros');
   const [monto, setMonto] = useState<number | null>(item.monto);
+  const [montoUsd, setMontoUsd] = useState<number | null>(item.montoUsd ?? 0);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -50,8 +54,8 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(
       item.entidad === 'gasto'
-        ? { entidad: 'gasto', id: item.id, concepto: descripcion, categoria, montoArs: monto }
-        : { entidad: 'consumo', id: item.id, comercio: descripcion, categoria, montoArs: monto },
+        ? { entidad: 'gasto', id: item.id, concepto: descripcion, categoria, montoArs: monto, montoUsd }
+        : { entidad: 'consumo', id: item.id, comercio: descripcion, categoria, montoArs: monto, montoUsd },
     ),
   });
 
@@ -70,8 +74,15 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
           {/* Un dato corregido a mano vale mas que uno interpretado: que se vea. */}
           {item.corregido && <Tag color="green" style={{ marginLeft: 6 }}>corregido</Tag>}
         </span>
-        <Space size="small">
-          <span className="monto ars">$ {item.monto.toLocaleString('es-AR')}</span>
+        <Space size="small" wrap>
+          {/* Un gasto puede venir entero en dolares: mostrar solo los pesos lo
+              dejaba en $ 0 aunque el cierre lo estuviera contando. */}
+          {(item.monto > 0 || !item.montoUsd) && (
+            <span className="monto ars">$ {item.monto.toLocaleString('es-AR')}</span>
+          )}
+          {!!item.montoUsd && (
+            <span className="monto usd">U$S {item.montoUsd.toLocaleString('es-AR')}</span>
+          )}
           <Button size="small" onClick={() => setEditando(true)}>Corregir</Button>
         </Space>
       </div>
@@ -84,7 +95,8 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
         <Space wrap>
           <Input value={descripcion} onChange={e => setDescripcion(e.target.value)} style={{ minWidth: 200 }} />
           <Select value={categoria} onChange={setCategoria} options={OPCIONES} style={{ width: 200 }} />
-          <InputNumber value={monto} onChange={setMonto} min={0} style={{ width: 160 }} prefix="$" />
+          <InputNumber value={monto} onChange={setMonto} min={0} style={{ width: 150 }} prefix="$" aria-label="Monto en pesos" />
+          <InputNumber value={montoUsd} onChange={setMontoUsd} min={0} style={{ width: 150 }} prefix="U$S" aria-label="Monto en dólares" />
         </Space>
         <Space wrap>
           <Button type="primary" size="small" onClick={guardar} loading={ocupado}>Guardar</Button>

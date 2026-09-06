@@ -105,6 +105,10 @@ section > h2 {
 .chip {
   font-family: var(--font-data); font-size: 11px;
   border: 1px solid currentColor; padding: 1px 6px; margin-left: 6px;
+  /* La fila corta el texto largo en cualquier lado para que el monto no se
+     escape, y eso partia las etiquetas al medio: "Suscripc / iones". El chip
+     es una unidad, se pasa entero de renglon o no se pasa. */
+  display: inline-block; white-space: nowrap;
 }
 .alerta { color: var(--alerta); }
 
