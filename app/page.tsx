@@ -13,6 +13,9 @@ import UploadPanel from './upload-panel';
 import BarChart from './bar-chart';
 import StackedBar from './stacked-bar';
 import { idUsuarioActual } from '@/lib/usuario';
+import { primerosPasos } from '@/lib/primeros-pasos';
+import PrimerosPasos from './primeros-pasos';
+import Monto from './monto';
 
 // Paleta validada para tres categorias sobre el papel de la app (contraste,
 // separacion bajo daltonismo y piso de croma). No agregar un cuarto color sin
@@ -37,7 +40,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <Nav />
         <p className="eyebrow">Cierre financiero</p>
         <h1>Sin datos</h1>
-        <p>Sincroniza Drive o subi los documentos a mano para armar el primer cierre.</p>
+        <PrimerosPasos arranque={await primerosPasos(usuarioId)} />
         <SyncButton />
         <UploadPanel />
       </main>
@@ -119,6 +122,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <h1>{periodo}</h1>
       <SyncButton />
 
+      <PrimerosPasos arranque={await primerosPasos(usuarioId)} />
+
       <div className="ledger">
         <div className="celda">
           <p className="eyebrow">Ingreso neto</p>
@@ -139,9 +144,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="op">=</div>
         <div className="celda">
           <p className="eyebrow">Ahorro {tasa !== null && `(${tasa.toFixed(1)}%)`}</p>
-          <p className="valor" style={{ color: (ahorro ?? 0) >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>
-            {ahorro === null ? '—' : fmtArs(ahorro)}
-          </p>
+          <p className="valor"><Monto valor={ahorro} /></p>
         </div>
       </div>
 

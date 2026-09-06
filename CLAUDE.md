@@ -132,6 +132,48 @@ Una operacion en pesos sin el dolar de su dia queda **afuera** del aportado y se
 cuenta aparte. Convertirla al dolar de hoy diria que compraste mucho mas barato
 de lo que compraste.
 
+## Categorias: son del usuario, no del codigo
+
+Estaban fijas en `lib/prompts.ts`, en rioplatense y con los rubros de una
+persona. Ahora viven en `settings` por usuario, y **los prompts son funciones
+que reciben la lista**: decirle al modelo que elija entre categorias que esa
+persona no usa produce exactamente las clasificaciones que despues hay que
+corregir a mano.
+
+En `settings` y no en una tabla propia porque una categoria no tiene mas
+atributos que su nombre, y los gastos ya la guardan como texto. Renombrarla no
+rompe nada — deja de agrupar lo viejo con lo nuevo, y la pantalla lo dice.
+
+`encajar()` compara sin mayusculas y sin acentos: "Educación" y "Educacion" son
+la misma, y mandarlas separadas partiria el gasto en dos columnas del grafico.
+`Otros` no se puede borrar: es donde cae lo que el modelo no supo clasificar.
+
+## Estado en la forma, no solo en el color
+
+Un monto negativo se distinguia solo por ser ocre. Quien no distingue ocre de
+gris veia el mismo numero.
+
+`<Monto>` pone **tres señales**: la flecha, el signo explicito —el `+` tambien,
+que es el que se omite por costumbre— y el color. El color refuerza; ya no es
+lo unico que lo dice. Lo mismo en los primeros pasos: tilde ademas de tachado,
+no solo verde.
+
+Cuando agregues estado nuevo, preguntate si se distingue en blanco y negro.
+
+## Navegacion
+
+Nueve secciones sueltas son nueve palabras indistinguibles. Van en **tres grupos
+de tres** —Mes, Invertido, Panorama— porque uno de cuatro se parte y agrega un
+renglon entero.
+
+En el telefono, ademas, los cuatro de uso diario van **fijos abajo**, al alcance
+del pulgar, y **se sacan del nav de arriba**: dos navegaciones con los mismos
+links son ruido, y son justo los pixeles que la barra venia a liberar. El nav
+superior quedo en 76px con los cinco secundarios.
+
+Los iconos de la barra van **con su etiqueta**. Un icono solo obliga a adivinar,
+y en finanzas adivinar sale caro.
+
 ## Colores y accesibilidad
 
 **Todo color de texto se mide antes de usarlo**: `node scripts/contraste.mjs`, y
@@ -152,15 +194,6 @@ sobre fondo papel mientras el resto se oscurece.
 
 `:focus-visible` esta en `globals.css` para todo lo navegable. Antes no habia
 ninguno y quien usa teclado no sabia donde estaba parado.
-
-## Navegacion
-
-Nueve secciones sueltas son nueve palabras indistinguibles. Van en **tres grupos
-de tres** —Mes, Invertido, Panorama— porque uno de cuatro se parte y agrega un
-renglon entero a un nav que ya se comia un cuarto de la pantalla del telefono.
-
-Los titulos de grupo son cortos a proposito: compiten por el mismo renglon que
-los links.
 
 ## Graficos
 

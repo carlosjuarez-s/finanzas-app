@@ -14,6 +14,7 @@ import LineChart from '../line-chart';
 import { historial, variacion, type SnapshotPeriodo } from '@/lib/historial-portafolio';
 import { fmtPeriodo } from '@/lib/formato';
 import { idUsuarioActual } from '@/lib/usuario';
+import Monto from '../monto';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,9 +149,7 @@ export default async function Portafolio() {
         <div className="op">=</div>
         <div className="celda">
           <p className="eyebrow">Sin realizar</p>
-          <p className="valor" style={{ color: noRealizado >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>
-            {invertidoUsd ? fmtUsd(noRealizado) : '—'}
-          </p>
+          <p className="valor"><Monto valor={invertidoUsd ? noRealizado : null} moneda="USD" /></p>
         </div>
       </div>
 
@@ -261,12 +260,11 @@ export default async function Portafolio() {
               <span style={{ textAlign: 'right' }}>
                 <span className="monto usd">{v.valorUsd !== null ? fmtUsd(v.valorUsd) : '—'}</span>
                 {r?.noRealizadoUsd != null && (
-                  <span
-                    className="monto"
-                    style={{ display: 'block', fontSize: 12, color: r.noRealizadoUsd >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}
-                  >
-                    {r.noRealizadoUsd >= 0 ? '+' : ''}{fmtUsd(r.noRealizadoUsd)}
-                    {r.retornoPct !== null && ` (${fmtPct(r.retornoPct)})`}
+                  <span style={{ display: 'block' }}>
+                    <Monto valor={r.noRealizadoUsd} moneda="USD" tamano={12} />
+                    {r.retornoPct !== null && (
+                      <span className="monto" style={{ fontSize: 12 }}> ({fmtPct(r.retornoPct)})</span>
+                    )}
                   </span>
                 )}
               </span>
@@ -294,9 +292,7 @@ export default async function Portafolio() {
           <h2>Ya realizado</h2>
           <div className="fila">
             <span>Resultado de lo que vendiste</span>
-            <span className="monto" style={{ color: realizado >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>
-              {fmtUsd(realizado)}
-            </span>
+            <Monto valor={realizado} moneda="USD" />
           </div>
         </section>
       )}

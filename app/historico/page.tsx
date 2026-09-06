@@ -8,6 +8,7 @@ import BarChart from '../bar-chart';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import { idUsuarioActual } from '@/lib/usuario';
+import Monto from '../monto';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,9 +66,7 @@ export default async function Historico() {
       <div className="ledger">
         <div className="celda">
           <p className="eyebrow">Ahorro acumulado</p>
-          <p className="valor" style={{ color: totalAhorrado >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>
-            {fmtArs(totalAhorrado)}
-          </p>
+          <p className="valor"><Monto valor={totalAhorrado} /></p>
         </div>
         <div className="op">·</div>
         <div className="celda">

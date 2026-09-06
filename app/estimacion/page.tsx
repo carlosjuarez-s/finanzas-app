@@ -11,6 +11,7 @@ import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import StackedBar from '../stacked-bar';
 import BarChart from '../bar-chart';
+import Monto from '../monto';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,8 +100,9 @@ export default async function Estimacion() {
         <div className="op">·</div>
         <div className="celda">
           <p className="eyebrow">Te quedaría</p>
-          <p className="valor" style={{ color: (e.ahorroEstimadoArs ?? 0) >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>
-            {e.ahorroEstimadoArs === null ? '—' : `≈ ${fmtArs(e.ahorroEstimadoArs)}`}
+          <p className="valor">
+            {e.ahorroEstimadoArs !== null && <span aria-hidden="true">≈ </span>}
+            <Monto valor={e.ahorroEstimadoArs} />
           </p>
         </div>
       </div>

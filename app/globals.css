@@ -442,3 +442,93 @@ section > h2 {
   left: 8px;
   top: 8px;
 }
+
+/* Primeros pasos. Existe solo hasta que sobra: un panel de bienvenida que
+   sigue ahi el sexto mes es ruido, no ayuda. */
+.arranque {
+  border: 1px solid var(--linea);
+  padding: 16px 18px;
+  margin-bottom: 26px;
+}
+.pasos { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.pasos li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
+/* El link del paso es el objetivo tactil: sin padding mide 18px de alto, que
+   en un telefono es imposible de acertar. Lo agarro scripts/responsive.mjs. */
+.pasos a { display: inline-block; padding: 7px 0; font-weight: 600; }
+.pasos .marca {
+  font-family: var(--font-data);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tinta-suave);
+}
+.pasos li.listo .marca { color: var(--dolar); }
+/* Tachado ademas de tenue: la diferencia no puede depender de ver el color. */
+.pasos li.listo a { color: var(--tinta-suave); text-decoration: line-through; }
+
+/* Texto solo para lectores de pantalla: el estado que el simbolo comunica
+   visualmente tambien tiene que llegar en palabras. */
+.sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Barra del pulgar.
+   Solo en el telefono: en una pantalla grande el nav de arriba ya esta a la
+   vista y una barra fija abajo seria un estorbo. */
+.pulgar { display: none; }
+
+@media (max-width: 560px) {
+  .pulgar {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    position: fixed;
+    inset: auto 0 0 0;
+    background: var(--papel);
+    border-top: 1px solid var(--linea);
+    /* El area segura del iPhone: sin esto la barra queda debajo del indicador
+       de gestos y los links de abajo no se pueden tocar. */
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    z-index: 20;
+  }
+  .pulgar a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 4px 7px;
+    font-family: var(--font-data);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--tinta-suave);
+    text-decoration: none;
+    min-height: 48px;
+  }
+  .pulgar a[aria-current='page'] {
+    color: var(--tinta);
+    /* El estado activo no depende del color: tambien lleva el filete arriba. */
+    box-shadow: inset 0 2px 0 var(--tinta);
+  }
+
+  /* Que la barra no tape el final del contenido. */
+  main { padding-bottom: 88px; }
+
+  /* Lo que ya esta abajo no se repite arriba: dos navegaciones con los mismos
+     cuatro links es ruido, y son justo los 109px que la barra venia a liberar.
+     Los grupos que se quedan sin links tambien se van, con su titulo. */
+  .nav li[data-pulgar] { display: none; }
+  .nav-grupo:has(li[data-pulgar]:only-child) { display: none; }
+}
+
+/* La flecha del signo. Chica y pegada al numero: es un refuerzo del signo, no
+   un icono que compita con la cifra. */
+.signo {
+  font-size: .78em;
+  margin-right: 2px;
+  vertical-align: 1px;
+}
