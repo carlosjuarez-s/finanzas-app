@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { monthlyCloses } from '@/db/schema';
 import { leerSupuestos, ahorroAcumuladoUsd } from '@/lib/supuestos';
+import { cierresEnPesos } from '@/lib/bimoneda';
 import { promedioMensual } from '@/lib/proyeccion';
 import { fmtArs } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
@@ -30,9 +31,9 @@ export default async function Proyeccion() {
 
   // Ultimos 6 meses: suficiente para suavizar un mes raro sin arrastrar un
   // sueldo de hace dos años.
-  const prom = promedioMensual(
-    cierres.map(c => ({ ingresoArs: Number(c.ingresoArs), gastoArs: Number(c.gastoArs) })),
-  );
+  // Consolidado, no la columna en pesos: proyectar sobre el 30% del ingreso
+  // daria una capacidad de ahorro que no es la de nadie.
+  const prom = promedioMensual(cierresEnPesos(cierres).cierres);
 
   if (!prom.meses) {
     return (

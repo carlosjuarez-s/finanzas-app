@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { goals, monthlyCloses } from '@/db/schema';
 import { leerSupuestos, ahorroAcumuladoUsd } from '@/lib/supuestos';
 import { proyectar, promedioMensual, mesQueAlcanza } from '@/lib/proyeccion';
+import { cierresEnPesos } from '@/lib/bimoneda';
 import { fmtUsd, fmtPct, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
@@ -31,9 +32,9 @@ export default async function Metas() {
     if (!tabla) throw e;
     return <FaltaMigracion tabla={tabla} seccion="Metas" />;
   }
-  const prom = promedioMensual(cierres.map(c => ({
-    ingresoArs: Number(c.ingresoArs), gastoArs: Number(c.gastoArs),
-  })));
+  // Consolidado: el aporte mensual sale de ingreso menos gasto, y con el
+  // ingreso a un tercio de lo real ninguna meta se alcanzaba nunca.
+  const prom = promedioMensual(cierresEnPesos(cierres).cierres);
   const aporteMensualUsd = supuestos.tipoCambioArs > 0
     ? Math.max(0, (prom.ingresoArs - prom.gastoArs) / supuestos.tipoCambioArs)
     : 0;

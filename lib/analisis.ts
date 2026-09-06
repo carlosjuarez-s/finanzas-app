@@ -4,6 +4,7 @@ import { monthlyCloses, gastos, goals, transacciones, portfolioSnapshots, presta
 import { auditar, type Hallazgo, type DatosAuditoria } from './auditoria';
 import { listarConexiones } from './conexiones';
 import { leerSupuestos, ahorroAcumuladoUsd } from './supuestos';
+import { cierresEnPesos } from './bimoneda';
 import { redactarProfundo } from './pii';
 import { resumir, type PrestamoPersonal } from './fiado';
 import { ANALISIS_SYSTEM } from './prompts';
@@ -60,14 +61,14 @@ export async function reunirDatos(usuarioId: string): Promise<DatosAuditoria> {
     .from(transacciones).where(eq(transacciones.usuarioId, usuarioId)))
     .map(r => r.activo);
 
+  const enPesos = cierresEnPesos(cierres);
+
   return {
-    cierres: cierres.map(c => ({
-      periodo: c.periodo,
-      ingresoArs: Number(c.ingresoArs), gastoArs: Number(c.gastoArs),
-      ahorroArs: Number(c.ahorroArs),
-      tasaAhorro: c.tasaAhorro === null ? null : Number(c.tasaAhorro),
-      porCategoria: c.porCategoria as Record<string, number>,
-    })),
+    // Consolidados. La auditoria marca "meses sin sueldo" mirando el ingreso:
+    // con la columna en pesos sola, alguien que cobra todo en dolares tendria
+    // esa alerta todos los meses de su vida.
+    cierres: enPesos.cierres,
+    cierresSinTipoCambio: enPesos.sinTipoCambio,
     gastos: sueltos.map(g => ({
       periodo: g.periodo, concepto: g.concepto, categoria: g.categoria, montoArs: Number(g.montoArs),
     })),

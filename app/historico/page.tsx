@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { monthlyCloses } from '@/db/schema';
 import { fmtArs, fmtPct, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
+import { cierresEnPesos } from '@/lib/bimoneda';
 import LineChart from '../line-chart';
 import BarChart from '../bar-chart';
 import Nav from '../nav';
@@ -36,13 +37,19 @@ export default async function Historico() {
     );
   }
 
-  const etiquetas = cierres.map(c => fmtPeriodo(c.periodo));
-  const ingresos = cierres.map(c => Number(c.ingresoArs));
-  const gastos = cierres.map(c => Number(c.gastoArs));
-  const ahorros = cierres.map(c => Number(c.ahorroArs));
+  // `ingreso_ars` es la parte en pesos, no el ingreso: el total sale de sumarle
+  // los dolares al tipo de cambio de ese mes. Leyendo la columna sola, quien
+  // cobra 70% en dolares veia el ahorro POR ENCIMA del ingreso en este mismo
+  // grafico, porque el ahorro si estaba consolidado.
+  const { cierres: enPesos, sinTipoCambio } = cierresEnPesos(cierres);
+
+  const etiquetas = enPesos.map(c => fmtPeriodo(c.periodo));
+  const ingresos = enPesos.map(c => c.ingresoArs);
+  const gastos = enPesos.map(c => c.gastoArs);
+  const ahorros = enPesos.map(c => c.ahorroArs);
 
   const totalAhorrado = ahorros.reduce((s, v) => s + v, 0);
-  const conIngreso = cierres.filter(c => c.tasaAhorro !== null);
+  const conIngreso = enPesos.filter(c => c.tasaAhorro !== null);
   const tasaPromedio = conIngreso.length
     ? conIngreso.reduce((s, c) => s + Number(c.tasaAhorro), 0) / conIngreso.length
     : null;
@@ -50,8 +57,8 @@ export default async function Historico() {
   // Categorias sumadas sobre todos los meses, para ver en que se va la plata
   // mas alla del mes puntual.
   const acumCategorias = new Map<string, number>();
-  for (const c of cierres) {
-    for (const [cat, monto] of Object.entries(c.porCategoria as Record<string, number>)) {
+  for (const c of enPesos) {
+    for (const [cat, monto] of Object.entries(c.porCategoria)) {
       acumCategorias.set(cat, (acumCategorias.get(cat) ?? 0) + monto);
     }
   }
@@ -61,7 +68,7 @@ export default async function Historico() {
     <main>
       <Nav />
       <p className="eyebrow">Historico</p>
-      <h1>{cierres.length} {cierres.length === 1 ? 'mes cerrado' : 'meses cerrados'}</h1>
+      <h1>{enPesos.length} {enPesos.length === 1 ? 'mes cerrado' : 'meses cerrados'}</h1>
 
       <div className="ledger">
         <div className="celda">
@@ -76,9 +83,19 @@ export default async function Historico() {
         <div className="op">·</div>
         <div className="celda">
           <p className="eyebrow">Meses con recibo</p>
-          <p className="valor">{conIngreso.length} / {cierres.length}</p>
+          <p className="valor">{conIngreso.length} / {enPesos.length}</p>
         </div>
       </div>
+
+      {sinTipoCambio.length > 0 && (
+        <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
+          {sinTipoCambio.length === 1
+            ? `${fmtPeriodo(sinTipoCambio[0])} no aparece acá`
+            : `${sinTipoCambio.length} meses no aparecen acá (${sinTipoCambio.map(fmtPeriodo).join(', ')})`}:
+          tienen movimientos en dólares y no quedó guardado el tipo de cambio de ese mes,
+          así que no se pueden sumar en pesos. Cargalo en Supuestos y volvé a cerrar el mes.
+        </p>
+      )}
 
       <section>
         <h2>Ingreso, gasto y ahorro</h2>
@@ -109,7 +126,7 @@ export default async function Historico() {
       <section>
         <h2>Tasa de ahorro mes a mes</h2>
         <BarChart
-          datos={cierres.filter(c => c.tasaAhorro !== null).map(c => ({
+          datos={enPesos.filter(c => c.tasaAhorro !== null).map(c => ({
             etiqueta: fmtPeriodo(c.periodo), valor: Number(c.tasaAhorro),
           }))}
           formato="pct"
@@ -123,12 +140,12 @@ export default async function Historico() {
 
       <section>
         <h2>Mes a mes</h2>
-        {[...cierres].reverse().map(c => (
+        {[...enPesos].reverse().map(c => (
           <div className="fila" key={c.periodo}>
             <span className="monto">{fmtPeriodo(c.periodo)}</span>
             <span>
-              <span className="monto ars">{fmtArs(Number(c.ahorroArs))}</span>
-              {c.tasaAhorro !== null && <span className="chip">{fmtPct(Number(c.tasaAhorro))}</span>}
+              <span className="monto ars">{fmtArs(c.ahorroArs)}</span>
+              {c.tasaAhorro !== null && <span className="chip">{fmtPct(c.tasaAhorro)}</span>}
             </span>
           </div>
         ))}

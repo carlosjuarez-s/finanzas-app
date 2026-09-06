@@ -73,3 +73,75 @@ export function tasaAhorro(ingresoArs: number | null, ahorroArs: number | null):
   if (!Number.isFinite(ingresoArs) || ingresoArs <= 0) return null;
   return (ahorroArs / ingresoArs) * 100;
 }
+
+/**
+ * Los totales consolidados de un cierre ya guardado.
+ *
+ * `monthly_closes` guarda las partes crudas —`ingreso_ars`, `ingreso_usd`— y el
+ * tipo de cambio con el que se cerro el mes. El total no esta guardado, se
+ * deriva: si el tipo de cambio de un mes estaba mal, se corrige uno y todo se
+ * recalcula.
+ *
+ * Esta funcion existe porque esa derivacion **hay que hacerla en todos lados**.
+ * Leer `ingreso_ars` como si fuera el ingreso del mes era el bug: para alguien
+ * que cobra 70% en dolares, el historico mostraba menos de un tercio de lo que
+ * gana, y el ahorro —que si esta consolidado— quedaba por encima del ingreso en
+ * el mismo grafico.
+ */
+export function totalesDelCierre(f: {
+  ingresoArs: unknown; ingresoUsd?: unknown;
+  gastoArs: unknown; gastoUsd?: unknown;
+  tipoCambio?: unknown;
+}): { ingreso: Consolidado; gasto: Consolidado } {
+  const tc = f.tipoCambio === null || f.tipoCambio === undefined ? null : Number(f.tipoCambio);
+  return {
+    ingreso: consolidar({ ars: finito(f.ingresoArs), usd: finito(f.ingresoUsd) }, tc),
+    gasto: consolidar({ ars: finito(f.gastoArs), usd: finito(f.gastoUsd) }, tc),
+  };
+}
+
+/** Un cierre ya consolidado en pesos, listo para graficar o promediar. */
+export type CierreEnPesos = {
+  periodo: string;
+  ingresoArs: number;
+  gastoArs: number;
+  ahorroArs: number;
+  tasaAhorro: number | null;
+  porCategoria: Record<string, number>;
+};
+
+/**
+ * Convierte filas de `monthly_closes` en cierres consolidados.
+ *
+ * Los meses que **no se pueden** consolidar —tienen dolares y no tienen tipo de
+ * cambio— quedan afuera y se devuelven aparte. No se los cuenta como cero: un
+ * mes del que no se sabe cuanto vale no vale cero, y meterlo en un promedio con
+ * un cero inventado hunde el promedio de todos los demas.
+ */
+export function cierresEnPesos(filas: {
+  periodo: string;
+  ingresoArs: unknown; ingresoUsd?: unknown;
+  gastoArs: unknown; gastoUsd?: unknown;
+  ahorroArs: unknown; tasaAhorro?: unknown; tipoCambio?: unknown;
+  porCategoria?: unknown;
+}[]): { cierres: CierreEnPesos[]; sinTipoCambio: string[] } {
+  const cierres: CierreEnPesos[] = [];
+  const sinTipoCambio: string[] = [];
+
+  for (const f of filas) {
+    const { ingreso, gasto } = totalesDelCierre(f);
+    if (ingreso.totalArs === null || gasto.totalArs === null) {
+      sinTipoCambio.push(f.periodo);
+      continue;
+    }
+    cierres.push({
+      periodo: f.periodo,
+      ingresoArs: ingreso.totalArs,
+      gastoArs: gasto.totalArs,
+      ahorroArs: finito(f.ahorroArs),
+      tasaAhorro: f.tasaAhorro === null || f.tasaAhorro === undefined ? null : Number(f.tasaAhorro),
+      porCategoria: (f.porCategoria ?? {}) as Record<string, number>,
+    });
+  }
+  return { cierres, sinTipoCambio };
+}

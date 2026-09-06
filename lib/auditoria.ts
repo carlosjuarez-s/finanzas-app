@@ -28,6 +28,9 @@ export type DatosAuditoria = {
   /** Plata prestada a personas, con lo que falta cobrar. Opcional: el resto de
    *  la auditoria no depende de esto y no queremos romper a quien no lo pase. */
   fiados?: { persona: string; pendiente: number; moneda: string; diasDesde: number | null; huboDevolucion: boolean }[];
+  /** Meses cerrados que no se pudieron consolidar en pesos. Opcional: sin esto
+   *  la auditoria funciona igual, solo que no avisa del hueco. */
+  cierresSinTipoCambio?: string[];
   ahorroAcumuladoUsd: number;
   tipoCambioArs: number;
   hoy: string;   // YYYY-MM
@@ -68,6 +71,21 @@ export function auditar(d: DatosAuditoria): Hallazgo[] {
         accion: 'Subi los resumenes de esos meses.',
       });
     }
+  }
+
+  // --- Meses que no se pueden consolidar ----------------------------------
+  // Estos meses no estan en `cierres`: se filtraron antes de llegar aca porque
+  // no hay con que convertir sus dolares. Un mes que desaparece del historico
+  // sin decir por que es peor que un mes con un numero raro.
+  const sinTc = d.cierresSinTipoCambio ?? [];
+  if (sinTc.length) {
+    out.push({
+      id: 'meses-sin-tipo-de-cambio',
+      severidad: 'alta',
+      titulo: `${sinTc.length} ${sinTc.length === 1 ? 'mes' : 'meses'} no se pueden sumar en pesos`,
+      detalle: `${sinTc.join(', ')} ${sinTc.length === 1 ? 'tiene' : 'tienen'} movimientos en dolares y no quedo guardado el tipo de cambio de ese mes. No aparecen en el historico ni en los promedios: no valen cero, no se sabe cuanto valen.`,
+      accion: 'Carga el tipo de cambio en Supuestos y volve a cerrar esos meses.',
+    });
   }
 
   // --- Meses sin recibo ---------------------------------------------------

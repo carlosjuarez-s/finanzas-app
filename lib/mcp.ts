@@ -32,7 +32,10 @@ const HERRAMIENTAS: Herramienta[] = [
     name: 'resumen_del_mes',
     description:
       'Cierre de un mes: ingreso, gasto, ahorro, tasa de ahorro, percepciones y desglose por categoría. ' +
-      'Los montos están en pesos argentinos. Usar cuando la pregunta es sobre un mes puntual.',
+      'Usar cuando la pregunta es sobre un mes puntual. El sueldo puede venir partido en dos monedas: ' +
+      'ingresoArs e ingresoUsd son las partes crudas, e ingresoTotalArs es el total consolidado al ' +
+      'tipo de cambio de ese mes — ese es el número para responder "cuánto gané". Viene en null cuando ' +
+      'hay dólares y no se guardó el tipo de cambio: ahí no hay total, y no hay que estimarlo.',
     inputSchema: {
       type: 'object',
       properties: { periodo: { type: 'string', description: 'Mes en formato YYYY-MM, por ejemplo 2026-08' } },
@@ -44,7 +47,9 @@ const HERRAMIENTAS: Herramienta[] = [
     name: 'meses_cerrados',
     description:
       'Los últimos meses cerrados con ingreso, gasto, ahorro y tasa de ahorro. ' +
-      'Usar para ver evolución o comparar meses entre sí.',
+      'Usar para ver evolución o comparar meses entre sí. Para comparar usar ingresoTotalArs y ' +
+      'gastoTotalArs, que son los consolidados al tipo de cambio de cada mes; las partes por moneda ' +
+      'quedan aparte. Un total en null es un mes que no se puede consolidar, no un mes en cero.',
     inputSchema: {
       type: 'object',
       properties: { cuantos: { type: 'integer', description: 'Cuántos meses traer (1 a 60, por defecto 12)' } },

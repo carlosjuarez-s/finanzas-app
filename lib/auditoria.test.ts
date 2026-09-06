@@ -164,3 +164,17 @@ test('no avisa por un prestamo reciente ni por uno ya saldado', () => {
 test('sin fiados la auditoria sigue funcionando', () => {
   assert.doesNotThrow(() => auditar(base()));
 });
+
+test('un mes que no se puede consolidar se reporta, no se traga', () => {
+  // Esos meses no llegan a `cierres`: se filtran antes. Si nadie avisa,
+  // desaparecen del historico y de los promedios sin explicacion.
+  const h = auditar(base({ cierresSinTipoCambio: ["2026-08", "2026-09"] }));
+  const hallazgo = h.find(x => x.id === 'meses-sin-tipo-de-cambio');
+  assert.ok(hallazgo, 'tiene que haber un hallazgo');
+  assert.match(hallazgo.detalle, /2026-08, 2026-09/);
+  assert.equal(hallazgo.severidad, 'alta');
+});
+
+test('sin meses colgados no inventa el hallazgo', () => {
+  assert.equal(auditar(base()).some(x => x.id === 'meses-sin-tipo-de-cambio'), false);
+});

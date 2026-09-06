@@ -10,6 +10,7 @@ import { resumir, type PrestamoPersonal } from './fiado';
 import { cargarPrestamos } from './cierre';
 import { redactarProfundo } from './pii';
 import { PERIODO } from './formato';
+import { totalesDelCierre } from './bimoneda';
 
 /**
  * Consultas de solo lectura sobre las finanzas.
@@ -41,10 +42,21 @@ export async function resumenDelMes(usuarioId: string, periodo: string) {
 
   if (!c) return { periodo, hayDatos: false as const };
 
+  // Las partes crudas Y el total. Devolver solo `ingreso_ars` era decirle al
+  // modelo que alguien que cobra 70% en dolares gana un tercio de lo que gana,
+  // y ademas los numeros no cerraban entre si: el ahorro si esta consolidado,
+  // asi que ingreso menos gasto no daba el ahorro.
+  const { ingreso, gasto } = totalesDelCierre(c);
+
   return redactarProfundo({
     periodo, hayDatos: true as const,
-    ingresoArs: Number(c.ingresoArs),
-    gastoArs: Number(c.gastoArs),
+    ingresoArs: ingreso.ars,
+    ingresoUsd: ingreso.usd,
+    ingresoTotalArs: ingreso.totalArs,
+    gastoArs: gasto.ars,
+    gastoUsd: gasto.usd,
+    gastoTotalArs: gasto.totalArs,
+    tipoCambio: ingreso.tipoCambio,
     ahorroArs: Number(c.ahorroArs),
     tasaAhorroPct: c.tasaAhorro === null ? null : Number(c.tasaAhorro),
     percepcionesArs: Number(c.percepArs),
@@ -58,20 +70,31 @@ export async function mesesCerrados(usuarioId: string, cuantos = 12) {
   const filas = await db.select({
     periodo: monthlyCloses.periodo,
     ingresoArs: monthlyCloses.ingresoArs,
+    ingresoUsd: monthlyCloses.ingresoUsd,
     gastoArs: monthlyCloses.gastoArs,
+    gastoUsd: monthlyCloses.gastoUsd,
+    tipoCambio: monthlyCloses.tipoCambio,
     ahorroArs: monthlyCloses.ahorroArs,
     tasaAhorro: monthlyCloses.tasaAhorro,
   }).from(monthlyCloses)
     .where(eq(monthlyCloses.usuarioId, usuarioId))
     .orderBy(desc(monthlyCloses.periodo)).limit(limite);
 
-  return redactarProfundo(filas.map(f => ({
-    periodo: f.periodo,
-    ingresoArs: Number(f.ingresoArs),
-    gastoArs: Number(f.gastoArs),
-    ahorroArs: Number(f.ahorroArs),
-    tasaAhorroPct: f.tasaAhorro === null ? null : Number(f.tasaAhorro),
-  })).reverse());
+  return redactarProfundo(filas.map(f => {
+    const { ingreso, gasto } = totalesDelCierre(f);
+    return {
+      periodo: f.periodo,
+      // El total es el numero para comparar meses; las partes quedan por si la
+      // pregunta es sobre el reparto entre monedas.
+      ingresoTotalArs: ingreso.totalArs,
+      gastoTotalArs: gasto.totalArs,
+      ingresoArs: ingreso.ars, ingresoUsd: ingreso.usd,
+      gastoArs: gasto.ars, gastoUsd: gasto.usd,
+      tipoCambio: ingreso.tipoCambio,
+      ahorroArs: Number(f.ahorroArs),
+      tasaAhorroPct: f.tasaAhorro === null ? null : Number(f.tasaAhorro),
+    };
+  }).reverse());
 }
 
 /**

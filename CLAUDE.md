@@ -102,6 +102,23 @@ Generalizar esto a otros paises no es agregar un selector de moneda: es otro
 proyecto. Hasta que alguien lo pida, la respuesta a "¿y si el usuario es de
 otro lado?" es **todavia no**.
 
+## El total de un cierre se deriva, no se lee
+
+`monthly_closes` guarda **las partes**: `ingreso_ars`, `ingreso_usd`, y el
+`tipo_cambio` con el que se cerro el mes. El total no esta guardado. Leer
+`ingreso_ars` como si fuera el ingreso del mes es un bug, y estuvo en cinco
+lugares a la vez: historico, proyeccion, metas, el analisis con IA y el MCP.
+
+Para quien cobra 70% en dolares eso mostraba menos de un tercio de lo que gana.
+Peor: `ahorro_ars` **si** esta consolidado, asi que en el mismo grafico la linea
+de ahorro quedaba por encima de la de ingreso.
+
+Se deriva con `cierresEnPesos()` (o `totalesDelCierre()` para una fila sola).
+Un mes con dolares y sin tipo de cambio **no entra**: se devuelve aparte en
+`sinTipoCambio`, la pagina lo dice y la auditoria lo marca. Nunca cuenta como
+cero — un mes del que no se sabe cuanto vale no vale cero, y un cero inventado
+hunde el promedio de todos los demas.
+
 ## Pagado y pendiente
 
 Cargar un gasto y pagarlo son dos momentos distintos. Pero lo pendiente **no
