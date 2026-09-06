@@ -132,6 +132,36 @@ Una operacion en pesos sin el dolar de su dia queda **afuera** del aportado y se
 cuenta aparte. Convertirla al dolar de hoy diria que compraste mucho mas barato
 de lo que compraste.
 
+## Colores y accesibilidad
+
+**Todo color de texto se mide antes de usarlo**: `node scripts/contraste.mjs`, y
+`lib/contraste.test.ts` lo verifica en cada corrida. El umbral es WCAG AA
+(4.5:1) contra su propio fondo.
+
+Esto no es cumplimiento por el cumplimiento. Los dos que estaban rotos parecian
+bien a ojo: `--tinta-suave` en 4.46 —el color de cada nota y cada etiqueta de la
+app— y `--alerta` en 3.78, que es justo el que marca los problemas. Que el texto
+que avisa de algo sea el mas dificil de leer es el peor lugar donde ahorrar
+contraste.
+
+El **modo oscuro no invierte** la paleta clara: tiene pasos propios, medidos
+contra el fondo oscuro, porque un color que pasa AA sobre papel casi nunca lo
+pasa sobre tinta. Y antd necesita sus dos temas en `app/theme.tsx`: no lee
+variables CSS, asi que con los colores claros clavados sus inputs quedarian
+sobre fondo papel mientras el resto se oscurece.
+
+`:focus-visible` esta en `globals.css` para todo lo navegable. Antes no habia
+ninguno y quien usa teclado no sabia donde estaba parado.
+
+## Navegacion
+
+Nueve secciones sueltas son nueve palabras indistinguibles. Van en **tres grupos
+de tres** —Mes, Invertido, Panorama— porque uno de cuatro se parte y agrega un
+renglon entero a un nav que ya se comia un cuarto de la pantalla del telefono.
+
+Los titulos de grupo son cortos a proposito: compiten por el mismo renglon que
+los links.
+
 ## Graficos
 
 La forma sale del trabajo que tiene que hacer el lector, y el color va al final.

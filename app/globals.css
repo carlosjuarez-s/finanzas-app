@@ -1,17 +1,47 @@
 /* Tokens — estetica "resumen bancario en papel de caña de azucar":
    papel calido tucumano, tinta de imprenta, celeste-peso y verde-dolar.
-   Los montos siempre en mono tabular, como un libro mayor. */
+   Los montos siempre en mono tabular, como un libro mayor.
+
+   Todos los colores de TEXTO estan medidos contra su fondo y pasan WCAG AA
+   (4.5:1). No es un detalle de cumplimiento: --tinta-suave es el color de cada
+   nota y cada etiqueta de la app, y --alerta es justo el que marca los
+   problemas. Que el texto que avisa de algo sea el mas dificil de leer es el
+   peor lugar donde ahorrar contraste.
+
+   Para cambiar un color, medilo antes:
+     node scripts/contraste.mjs                                              */
 :root {
   --papel: #F5F2EA;
-  --tinta: #22262B;
-  --tinta-suave: #6B7076;
-  --linea: #D9D3C4;
-  --peso: #2D5FA8;   /* ARS */
-  --dolar: #1E7A4F;  /* USD */
-  --alerta: #B4690E;
+  --papel-alto: #FFFDF7;
+  --tinta: #22262B;         /* 13.60:1 */
+  --tinta-suave: #6A6F75;   /*  4.53:1 — era #6B7076, quedaba en 4.46 */
+  --linea: #D9D3C4;         /*  solo bordes: no lleva texto encima */
+  --peso: #2D5FA8;          /*  5.66:1 — ARS */
+  --dolar: #1E7A4F;         /*  4.75:1 — USD */
+  --alerta: #A25E0D;        /*  4.53:1 — era #B4690E, quedaba en 3.78 */
+  --foco: #2D5FA8;
   --font-display: 'Archivo', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-data: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* Modo oscuro.
+   No es la paleta clara invertida: se eligieron pasos propios y se midieron
+   contra el fondo oscuro, porque un color que pasa AA sobre papel casi nunca
+   lo pasa sobre tinta. La identidad se mantiene —sigue siendo tinta calida
+   sobre un gris de imprenta— pero cada acento subio hasta alcanzar 4.5:1. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --papel: #1A1D21;
+    --papel-alto: #22262B;
+    --tinta: #E9E5DB;         /* 12.9:1 */
+    --tinta-suave: #7F858C;   /*  4.54:1 */
+    --linea: #343B42;
+    --peso: #3E83E8;          /*  4.52:1 */
+    --dolar: #259661;         /*  4.52:1 */
+    --alerta: #C1700F;        /*  4.50:1 */
+    --foco: #3E83E8;
+  }
 }
 * { box-sizing: border-box; margin: 0; }
 body {
@@ -137,7 +167,27 @@ section > h2 {
 .barra-valor { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* Navegacion entre secciones */
-.nav { display: flex; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--linea); padding-bottom: 10px; margin-bottom: 18px; }
+/* Navegacion agrupada. Nueve links sueltos ocupaban tres renglones de palabras
+   indistinguibles; en tres grupos rotulados uno sabe donde mirar antes de leer. */
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  /* Sin gap vertical: los links ya traen 8px arriba y abajo para ser tocables,
+     y sumarle mas hacia que el nav se comiera un cuarto de la pantalla. */
+  gap: 0 22px;
+  border-bottom: 1px solid var(--linea);
+  padding-bottom: 10px;
+  margin-bottom: 18px;
+}
+.nav-grupo { display: flex; align-items: baseline; gap: 10px; }
+.nav-titulo {
+  /* 11px es el piso de legibilidad en un telefono, y lo verifica
+     scripts/responsive.mjs. A 9px se leia bien en el monitor y no en la mano. */
+  font-family: var(--font-data); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--tinta-suave);
+  white-space: nowrap;
+}
+.nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 13px; flex-wrap: wrap; }
 .nav a {
   font-family: var(--font-data); font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.1em; color: var(--tinta-suave); text-decoration: none;
@@ -356,3 +406,39 @@ section > h2 {
 }
 .salidas li strong { color: var(--tinta); font-weight: 600; }
 .salidas li:first-child { border-left-color: var(--dolar); }
+
+
+/* Foco visible.
+   La app no tenia ninguno: quien navega con teclado no sabia donde estaba
+   parado. El outline va con offset para que no se coma el borde del control,
+   y usa :focus-visible para no aparecer al hacer click con el mouse. */
+:where(a, button, [role='button'], summary, input, select, textarea):focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Los <details> de las tablas gemelas y el nav tambien: son navegables y
+   antes quedaban sin ninguna marca. */
+.tabla-gemela summary:focus-visible,
+.nav a:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 3px;
+}
+
+/* Saltar al contenido: con nueve secciones en el nav, llegar al contenido con
+   teclado eran nueve tabulaciones en cada pantalla. */
+.saltar {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--papel-alto);
+  color: var(--tinta);
+  border: 1px solid var(--tinta);
+  padding: 10px 14px;
+  z-index: 100;
+}
+.saltar:focus {
+  left: 8px;
+  top: 8px;
+}

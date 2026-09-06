@@ -5,6 +5,11 @@ import Sesion from './sesion';
 
 export const metadata = { title: 'Finanzas — Cierre mensual' };
 
+// El navegador pinta su propio fondo (barras, overscroll) segun esto: sin
+// declararlo, en modo oscuro los bordes quedan blancos alrededor de una app
+// oscura.
+export const viewport = { colorScheme: 'light dark' as const };
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
@@ -17,8 +22,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AntdRegistry>
           <Theme>
+            {/* Con nueve secciones en el nav, llegar al contenido con teclado
+                eran nueve tabulaciones en cada pantalla. */}
+            <a className="saltar" href="#contenido">Saltar al contenido</a>
             <Sesion />
-            {children}
+            <div id="contenido">{children}</div>
           </Theme>
         </AntdRegistry>
       </body>
