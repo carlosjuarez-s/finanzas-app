@@ -104,9 +104,16 @@ test('sin monto otorgado el costo es null, no cero', () => {
 
 test('el total del mes suma solo los prestamos vigentes', () => {
   const otro: Prestamo = { ...base, id: 'p2', cuotas: 3, cuotaArs: 50_000, primerPeriodo: '2026-01' };
-  assert.equal(totalDelMes([base, otro], '2026-03'), 170_000);
-  assert.equal(totalDelMes([base, otro], '2026-04'), 120_000);
-  assert.equal(totalDelMes([], '2026-04'), 0);
+  assert.deepEqual(totalDelMes([base, otro], '2026-03'), { ars: 170_000, usd: 0 });
+  assert.deepEqual(totalDelMes([base, otro], '2026-04'), { ars: 120_000, usd: 0 });
+  assert.deepEqual(totalDelMes([], '2026-04'), { ars: 0, usd: 0 });
+});
+
+test('un credito en dolares no se suma con los de pesos', () => {
+  // Sumado crudo, una cuota de USD 200 entraba al gasto del mes como 200
+  // pesos: mil quinientas veces menos de lo que sale.
+  const enDolares: Prestamo = { ...base, id: 'p3', moneda: 'USD', cuotaArs: 200 };
+  assert.deepEqual(totalDelMes([base, enDolares], '2026-03'), { ars: 120_000, usd: 200 });
 });
 
 test('los periodos con cuota cubren el plan entero sin huecos', () => {

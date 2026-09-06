@@ -67,7 +67,7 @@ export default async function Estimacion() {
       ).totalArs
     : null;
 
-  const e = estimar(periodo, historico, prestamos, ingresoRef);
+  const e = estimar(periodo, historico, prestamos, ingresoRef, { tipoCambio: tcReferencia });
 
   const partes = [
     { etiqueta: 'Comprometido', valor: e.comprometidoArs, color: COLOR_COMPROMETIDO },

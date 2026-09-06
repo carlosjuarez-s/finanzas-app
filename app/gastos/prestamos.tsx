@@ -3,10 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Input, InputNumber, Select, Space, Popconfirm, Typography, Tag } from 'antd';
-import { fmtArs, fmtPeriodo } from '@/lib/formato';
+import { fmtArs, fmtUsd, fmtPeriodo } from '@/lib/formato';
 import { estado, type Prestamo } from '@/lib/prestamos';
 
 const { Text } = Typography;
+
+// Un prestamo puede estar en dolares, y entonces sus cifras son dolares: el
+// campo se llama `cuotaArs` por historia, no porque el numero sean pesos.
+const fmtDe = (moneda: string) => (moneda === 'USD' ? fmtUsd : fmtArs);
+const esUsd = (p: { moneda: string }) => p.moneda === 'USD';
 
 export default function Prestamos({ prestamos, periodo }: { prestamos: Prestamo[]; periodo: string }) {
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -15,14 +20,21 @@ export default function Prestamos({ prestamos, periodo }: { prestamos: Prestamo[
   const estados = prestamos.map(p => ({ p, e: estado(p, periodo) }));
   const vigentes = estados.filter(x => !x.e.terminado && !x.e.cancelado);
 
-  const cuotaDelMes = estados.reduce((s, x) => s + (x.e.cuotaDelMes === null ? 0 : x.p.cuotaArs), 0);
-  const deuda = vigentes.reduce((s, x) => s + x.e.saldoArs, 0);
+  // Por moneda, sin mezclar: sumar una cuota de USD 200 con una de $ 120.000
+  // da un numero que no significa nada.
+  const suma = (xs: typeof estados, valor: (x: typeof estados[number]) => number) => ({
+    ars: xs.filter(x => !esUsd(x.p)).reduce((s, x) => s + valor(x), 0),
+    usd: xs.filter(x => esUsd(x.p)).reduce((s, x) => s + valor(x), 0),
+  });
+  const cuotaDelMes = suma(estados, x => (x.e.cuotaDelMes === null ? 0 : x.p.cuotaArs));
+  const deuda = suma(vigentes, x => x.e.saldoArs);
 
   return (
     <section>
       <h2>
         Préstamos y créditos
-        {cuotaDelMes > 0 && <span className="chip">{fmtArs(cuotaDelMes)} este mes</span>}
+        {cuotaDelMes.ars > 0 && <span className="chip">{fmtArs(cuotaDelMes.ars)} este mes</span>}
+        {cuotaDelMes.usd > 0 && <span className="chip">{fmtUsd(cuotaDelMes.usd)} este mes</span>}
       </h2>
 
       {prestamos.length === 0 ? (
@@ -32,11 +44,14 @@ export default function Prestamos({ prestamos, periodo }: { prestamos: Prestamo[
         </p>
       ) : (
         <>
-          {deuda > 0 && (
+          {(deuda.ars > 0 || deuda.usd > 0) && (
             <p className="resultado">
-              Te falta pagar <span className="monto ars">{fmtArs(deuda)}</span> entre{' '}
-              {vigentes.reduce((s, x) => s + x.e.restantes, 0)} cuotas. Eso ya está comprometido:
-              no es plata disponible para una meta.
+              Te falta pagar{' '}
+              {deuda.ars > 0 && <span className="monto ars">{fmtArs(deuda.ars)}</span>}
+              {deuda.ars > 0 && deuda.usd > 0 && ' y '}
+              {deuda.usd > 0 && <span className="monto usd">{fmtUsd(deuda.usd)}</span>}
+              {' '}entre {vigentes.reduce((s, x) => s + x.e.restantes, 0)} cuotas. Eso ya está
+              comprometido: no es plata disponible para una meta.
             </p>
           )}
 
@@ -84,7 +99,7 @@ function Fila({ prestamo: p, est, abierta, abrir, cerrar }: {
         {est.cancelado && <Tag style={{ marginLeft: 6 }}>cancelado</Tag>}
 
         <span className="resultado" style={{ display: 'block' }}>
-          {est.pagadas} de {p.cuotas} cuotas · {fmtArs(p.cuotaArs)} c/u
+          {est.pagadas} de {p.cuotas} cuotas · {fmtDe(p.moneda)(p.cuotaArs)} c/u
           {!est.terminado && ` · última en ${fmtPeriodo(est.ultimoPeriodo)}`}
         </span>
 
@@ -95,15 +110,17 @@ function Fila({ prestamo: p, est, abierta, abrir, cerrar }: {
 
         {est.costoArs !== null && (
           <span className="resultado" style={{ display: 'block' }}>
-            Te dieron {fmtArs(p.montoOtorgado ?? 0)} y vas a devolver {fmtArs(est.totalArs)}:
-            el crédito cuesta {fmtArs(est.costoArs)}
+            Te dieron {fmtDe(p.moneda)(p.montoOtorgado ?? 0)} y vas a devolver {fmtDe(p.moneda)(est.totalArs)}:
+            el crédito cuesta {fmtDe(p.moneda)(est.costoArs)}
             {p.cftAnual ? ` · CFT ${p.cftAnual}%` : ''}
           </span>
         )}
       </span>
 
       <span style={{ textAlign: 'right' }}>
-        <span className="monto ars">{est.restantes ? fmtArs(est.saldoArs) : '—'}</span>
+        <span className={`monto ${esUsd(p) ? 'usd' : 'ars'}`}>
+          {est.restantes ? fmtDe(p.moneda)(est.saldoArs) : '—'}
+        </span>
         <span className="resultado" style={{ display: 'block', fontSize: 12 }}>
           {est.restantes ? `${est.restantes} por pagar` : 'saldado'}
         </span>
@@ -169,6 +186,7 @@ function Formulario({ prestamo, onListo, onCancelar }: {
           <InputNumber placeholder="Cuántas cuotas" value={f.cuotas} min={1} precision={0}
             onChange={v => setF(s => ({ ...s, cuotas: v }))} style={{ width: 150 }} />
           <InputNumber placeholder="Monto de la cuota" value={f.cuotaArs} min={0}
+            prefix={f.moneda === 'USD' ? 'U$S' : '$'} aria-label="Monto de la cuota"
             onChange={v => setF(s => ({ ...s, cuotaArs: v }))} style={{ width: 180 }} />
           <Select value={f.moneda} onChange={v => setF(s => ({ ...s, moneda: v }))} style={{ width: 90 }}
             options={[{ value: 'ARS', label: 'ARS' }, { value: 'USD', label: 'USD' }]} />
@@ -182,6 +200,7 @@ function Formulario({ prestamo, onListo, onCancelar }: {
 
         <Space wrap>
           <InputNumber placeholder="Monto que te dieron" value={f.montoOtorgado} min={0}
+            prefix={f.moneda === 'USD' ? 'U$S' : '$'} aria-label="Monto que te dieron"
             onChange={v => setF(s => ({ ...s, montoOtorgado: v }))} style={{ width: 200 }} />
           <InputNumber placeholder="CFT anual" value={f.cftAnual} min={0} suffix="%"
             onChange={v => setF(s => ({ ...s, cftAnual: v }))} style={{ width: 140 }} />

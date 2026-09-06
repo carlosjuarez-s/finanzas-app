@@ -167,7 +167,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   }
   // La cuota no es un item cargado, sale del plan del prestamo: si no entra
   // acá, el grafico muestra menos gasto del que el cierre esta contando.
-  const cuotas = totalDelMes(prestamos, periodo);
+  const cuotas = consolidar(totalDelMes(prestamos, periodo), tc).totalArs;
   if (cuotas) acum.set('Cuotas', (acum.get('Cuotas') ?? 0) + cuotas);
   const porCategoria = [...acum.entries()]
     .sort((a, b) => b[1] - a[1])

@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, portfolioSnapshots, gastos as tablaGastos } from '@/db/schema';
 import { calcularCierre, cargarPrestamos } from '@/lib/cierre';
+import { consolidar } from '@/lib/bimoneda';
 import { totalDelMes } from '@/lib/prestamos';
 import { preciosDePortafolio } from '@/lib/precios';
 import { clasesDeActivos, ratiosVigentes } from '@/lib/sync-portafolio';
@@ -78,8 +79,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       .where(and(eq(tablaGastos.usuarioId, usuarioId), eq(tablaGastos.periodo, periodo))),
     cargarPrestamos(usuarioId),
   ]);
+  // Las cuotas pueden estar en dolares. Sumarlas crudas al total en pesos
+  // metia un credito de USD 200 como 200 pesos.
+  const cuotasDelMes = totalDelMes(prestamosCargados, periodo);
   const otrosArs = sueltosDelMes.reduce((s, g) => s + Number(g.montoArs), 0)
-    + totalDelMes(prestamosCargados, periodo);
+    + (consolidar(cuotasDelMes, cierre.tipoCambio).totalArs ?? cuotasDelMes.ars);
 
   // Cotizaciones en vivo, pero SOLO para el mes en curso. Un mes cerrado es un
   // registro de lo que valia entonces: repreciarlo con el valor de hoy borraria

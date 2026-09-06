@@ -8,6 +8,7 @@
  */
 
 import { PERIODO } from './formato';
+import type { Bimoneda } from './bimoneda';
 
 export type Prestamo = {
   id: string;
@@ -55,7 +56,14 @@ export function cuotaEnPeriodo(p: Prestamo, periodo: string): number | null {
   return n >= 1 && n <= p.cuotas ? n : null;
 }
 
-/** Cuanto suma este prestamo al gasto de ese mes. */
+/**
+ * Cuanto suma este prestamo al gasto de ese mes, **en la moneda del prestamo**.
+ *
+ * El campo se llama `cuotaArs` por historia: nacio cuando todos los creditos
+ * eran en pesos. Hoy un prestamo puede estar en dolares y ahi el numero son
+ * dolares. Quien lo sume tiene que mirar `p.moneda` — para eso esta
+ * `totalDelMes`, que ya devuelve las dos partes separadas.
+ */
 export function montoEnPeriodo(p: Prestamo, periodo: string): number {
   return cuotaEnPeriodo(p, periodo) === null ? 0 : p.cuotaArs;
 }
@@ -108,8 +116,17 @@ export function estado(p: Prestamo, periodo: string): EstadoPrestamo {
 }
 
 /** Lo que todos los prestamos suman al gasto de un mes. */
-export function totalDelMes(ps: Prestamo[], periodo: string): number {
-  return ps.reduce((s, p) => s + montoEnPeriodo(p, periodo), 0);
+export function totalDelMes(ps: Prestamo[], periodo: string): Bimoneda {
+  // Separadas por moneda, no sumadas. Antes esto devolvia un solo numero y el
+  // cierre lo metia entero en el gasto en pesos: un credito de USD 200 entraba
+  // como 200 pesos, mil quinientas veces menos de lo que sale.
+  const total: Bimoneda = { ars: 0, usd: 0 };
+  for (const p of ps) {
+    const monto = montoEnPeriodo(p, periodo);
+    if (p.moneda === 'USD') total.usd += monto;
+    else total.ars += monto;
+  }
+  return total;
 }
 
 /**

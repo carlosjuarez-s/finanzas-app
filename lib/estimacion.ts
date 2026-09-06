@@ -1,4 +1,5 @@
-import { sumarMeses, montoEnPeriodo, type Prestamo } from './prestamos';
+import { sumarMeses, totalDelMes, type Prestamo } from './prestamos';
+import { consolidar } from './bimoneda';
 
 /**
  * Cuanto vas a gastar el mes que viene.
@@ -65,7 +66,9 @@ export function estimar(
   historico: MesHistorico[],
   prestamos: Prestamo[],
   ingresoReferenciaArs: number | null,
-  opciones: { mesesAMirar?: number } = {},
+  // `tipoCambio` es el mismo que usa el ingreso de referencia. Sin el, una
+  // cuota en dolares no se puede pasar a pesos y queda afuera, avisando.
+  opciones: { mesesAMirar?: number; tipoCambio?: number | null } = {},
 ): Estimacion {
   const cuantos = Math.min(Math.max(1, opciones.mesesAMirar ?? 6), 24);
 
@@ -79,7 +82,14 @@ export function estimar(
   const advertencias: string[] = [];
 
   // --- Comprometido: las cuotas que ya caen en ese mes --------------------
-  const comprometidoArs = prestamos.reduce((s, p) => s + montoEnPeriodo(p, periodo), 0);
+  // Separadas por moneda: sumar una cuota de USD 200 como 200 pesos daba un
+  // comprometido que no existe.
+  const cuotas = totalDelMes(prestamos, periodo);
+  const comprometido = consolidar(cuotas, opciones.tipoCambio ?? null);
+  const comprometidoArs = comprometido.totalArs ?? cuotas.ars;
+  if (comprometido.totalArs === null) {
+    advertencias.push('Hay cuotas en dólares y no hay tipo de cambio: quedaron afuera del comprometido.');
+  }
 
   // --- Historico por categoria -------------------------------------------
   const porCategoria = new Map<string, number[]>();

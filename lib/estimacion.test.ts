@@ -105,3 +105,22 @@ test('se estima el mes siguiente al ultimo cerrado', () => {
   assert.equal(proximoPeriodo('2025-01', '2026-08'), '2026-09');
   assert.equal(proximoPeriodo(undefined, '2026-08'), '2026-09');
 });
+
+test('una cuota en dolares se convierte, no se suma como pesos', () => {
+  const enDolares: Prestamo = {
+    id: 'p1', nombre: 'Notebook', moneda: 'USD', cuotas: 12, cuotaArs: 200,
+    primerPeriodo: '2026-01', cftAnual: null, canceladoEn: null, entidad: null, montoOtorgado: null,
+  };
+  const e = estimar('2026-03', [], [enDolares], null, { tipoCambio: 1_500 });
+  assert.equal(e.comprometidoArs, 300_000);
+});
+
+test('sin tipo de cambio, la cuota en dolares queda afuera y se avisa', () => {
+  const enDolares: Prestamo = {
+    id: 'p1', nombre: 'Notebook', moneda: 'USD', cuotas: 12, cuotaArs: 200,
+    primerPeriodo: '2026-01', cftAnual: null, canceladoEn: null, entidad: null, montoOtorgado: null,
+  };
+  const e = estimar('2026-03', [], [enDolares], null);
+  assert.equal(e.comprometidoArs, 0);
+  assert.ok(e.advertencias.some(a => /dólares/.test(a)), e.advertencias.join(' | '));
+});

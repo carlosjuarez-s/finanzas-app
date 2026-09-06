@@ -102,6 +102,18 @@ Generalizar esto a otros paises no es agregar un selector de moneda: es otro
 proyecto. Hasta que alguien lo pida, la respuesta a "¿y si el usuario es de
 otro lado?" es **todavia no**.
 
+## Un prestamo puede estar en dolares
+
+El campo se llama `cuota_ars` por historia: nacio cuando todos los creditos
+eran en pesos. Hoy `prestamos.moneda` puede ser USD, y entonces ese numero son
+dolares. Sumarlo crudo al gasto en pesos metia una cuota de USD 200 como 200
+pesos — mil quinientas veces menos de lo que sale.
+
+`totalDelMes()` devuelve `{ ars, usd }`, no un numero. El cierre suma cada
+parte donde corresponde, y la categoria "Cuotas" del desglose entra convertida
+al tipo de cambio del mes (o no entra, si no hay con que convertir). En la
+pantalla, cada prestamo se muestra **en su propia moneda**: `fmtDe(p.moneda)`.
+
 ## El total de un cierre se deriva, no se lee
 
 `monthly_closes` guarda **las partes**: `ingreso_ars`, `ingreso_usd`, y el

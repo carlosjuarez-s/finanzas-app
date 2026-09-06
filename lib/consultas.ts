@@ -231,7 +231,8 @@ export async function compromisos(usuarioId: string, hoy: string) {
 
   return redactarProfundo({
     // Lo que debés
-    cuotaDelMesArs: totalDelMes(creditos, mes),
+    // Separado por moneda: un credito en dolares no es una cifra en pesos.
+    cuotaDelMes: totalDelMes(creditos, mes),
     creditos: creditos.map(p => {
       const e = estadoPrestamo(p, mes);
       return {

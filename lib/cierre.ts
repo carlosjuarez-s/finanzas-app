@@ -92,13 +92,14 @@ export async function calcularCierre(usuarioId: string, periodo: string): Promis
 
   // La cuota del mes se deriva del plan del prestamo, no se carga como gasto.
   // Cargarla a mano ademas la contaria dos veces.
-  const cuotasArs = totalDelMes(await cargarPrestamos(usuarioId), periodo);
+  const cuotas = totalDelMes(await cargarPrestamos(usuarioId), periodo);
 
   const gastoArs = sts.reduce((s, st) => s + Number(st.totalArs), 0)
     + sueltos.reduce((s, g) => s + Number(g.montoArs), 0)
-    + cuotasArs;
+    + cuotas.ars;
   const gastoUsd = sts.reduce((s, st) => s + Number(st.totalUsd), 0)
-    + sueltos.reduce((s, g) => s + Number(g.montoUsd), 0);
+    + sueltos.reduce((s, g) => s + Number(g.montoUsd), 0)
+    + cuotas.usd;
   const percepArs = sts.reduce((s, st) => s + Number(st.percepArs), 0);
   const ingresoArs = Number(salary?.netoArs ?? 0);
   const ingresoUsd = Number(salary?.netoUsd ?? 0);
@@ -124,7 +125,11 @@ export async function calcularCierre(usuarioId: string, periodo: string): Promis
   for (const g of sueltos) {
     porCategoria[g.categoria] = (porCategoria[g.categoria] ?? 0) + Number(g.montoArs);
   }
-  if (cuotasArs) porCategoria['Cuotas'] = (porCategoria['Cuotas'] ?? 0) + cuotasArs;
+  // El desglose por categoria esta en pesos: una cuota en dolares entra
+  // convertida, y si no hay con que convertirla no entra — el total del mes ya
+  // queda en null por el mismo motivo.
+  const cuotasEnPesos = consolidar(cuotas, tc).totalArs;
+  if (cuotasEnPesos) porCategoria['Cuotas'] = (porCategoria['Cuotas'] ?? 0) + cuotasEnPesos;
 
   return {
     periodo, ingresoArs, ingresoUsd, gastoArs, gastoUsd,
