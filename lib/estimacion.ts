@@ -14,10 +14,16 @@ import { consolidar } from './bimoneda';
  *
  *   COMPROMETIDO  las cuotas que ya sabes que caen. No es una prediccion: esta
  *                 firmado. Es la parte que se puede afirmar.
- *   RECURRENTE    lo que aparece todos los meses (alquiler, luz, internet). Se
+ *   FIJO          los gastos que declaraste como recurrentes, con su monto y
+ *                 su aumento. Tampoco es una prediccion: lo dijiste vos.
+ *   RECURRENTE    lo que APARENTA repetirse en el historico y no declaraste. Se
  *                 estima con la MEDIANA, no el promedio: un mes con un gasto
  *                 raro corre el promedio y no la mediana.
  *   VARIABLE      el resto. Es lo que peor se predice y hay que decirlo.
+ *
+ * Lo declarado le gana a lo inferido, y hay que **restarlo** del historico o se
+ * cuenta dos veces: el alquiler que declaraste tambien esta en la categoria
+ * "Alquiler" de los meses que ya pasaron.
  */
 
 export type MesHistorico = {
@@ -30,7 +36,7 @@ export type LineaEstimada = {
   categoria: string;
   montoArs: number;
   /** De donde sale: cambia cuanto se le puede creer. */
-  base: 'comprometido' | 'recurrente' | 'variable';
+  base: 'comprometido' | 'fijo' | 'recurrente' | 'variable';
   /** En cuantos de los meses mirados aparecio. */
   mesesConDato: number;
 };
@@ -39,6 +45,7 @@ export type Estimacion = {
   periodo: string;
   mesesUsados: number;
   comprometidoArs: number;
+  fijoArs: number;
   recurrenteArs: number;
   variableArs: number;
   totalArs: number;
@@ -68,7 +75,12 @@ export function estimar(
   ingresoReferenciaArs: number | null,
   // `tipoCambio` es el mismo que usa el ingreso de referencia. Sin el, una
   // cuota en dolares no se puede pasar a pesos y queda afuera, avisando.
-  opciones: { mesesAMirar?: number; tipoCambio?: number | null } = {},
+  opciones: {
+    mesesAMirar?: number;
+    tipoCambio?: number | null;
+    /** Los gastos fijos declarados, ya resueltos para el mes que se estima. */
+    fijos?: { porCategoria: Record<string, number>; totalArs: number; faltaIndice: string[] };
+  } = {},
 ): Estimacion {
   const cuantos = Math.min(Math.max(1, opciones.mesesAMirar ?? 6), 24);
 
@@ -105,13 +117,21 @@ export function estimar(
   let recurrenteArs = 0;
   let variableArs = 0;
 
+  const fijos = opciones.fijos ?? { porCategoria: {}, totalArs: 0, faltaIndice: [] };
+  const fijoArs = fijos.totalArs;
+
   for (const [categoria, valores] of porCategoria) {
     // "Cuotas" ya viene por el lado de los prestamos: contarla tambien desde el
     // historico la duplicaria, y es justo la categoria mas facil de duplicar
     // porque aparece en los dos lados.
     if (categoria === 'Cuotas') continue;
 
-    const montoArs = mediana(valores);
+    // Lo declarado ya esta contado en `fijoArs`, y tambien esta adentro de la
+    // mediana de esta categoria: se resta, no se descarta la categoria entera.
+    // Descartarla perderia lo variable que comparte rubro con un fijo —un
+    // alquiler declarado no significa que "Alquiler" no tenga nada mas.
+    const declarado = fijos.porCategoria[categoria] ?? 0;
+    const montoArs = Math.max(0, mediana(valores) - declarado);
     if (montoArs <= 0) continue;
 
     const frecuencia = valores.length / meses.length;
@@ -120,6 +140,12 @@ export function estimar(
     lineas.push({ categoria, montoArs, base, mesesConDato: valores.length });
     if (base === 'recurrente') recurrenteArs += montoArs;
     else variableArs += montoArs;
+  }
+
+  for (const [categoria, montoArs] of Object.entries(fijos.porCategoria)) {
+    if (montoArs > 0) {
+      lineas.push({ categoria: `${categoria} (fijo)`, montoArs, base: 'fijo', mesesConDato: meses.length });
+    }
   }
 
   if (comprometidoArs > 0) {
@@ -131,7 +157,7 @@ export function estimar(
 
   lineas.sort((a, b) => b.montoArs - a.montoArs);
 
-  const totalArs = comprometidoArs + recurrenteArs + variableArs;
+  const totalArs = comprometidoArs + fijoArs + recurrenteArs + variableArs;
 
   // --- Lo que hay que decir para que el numero no se lea de mas ----------
   if (!meses.length) {
@@ -142,6 +168,13 @@ export function estimar(
 
   if (historico.some(m => m.gastoTotalArs === null)) {
     advertencias.push('Hay meses sin tipo de cambio cargado y quedaron afuera del cálculo.');
+  }
+
+  if (fijos.faltaIndice.length) {
+    advertencias.push(
+      `A ${fijos.faltaIndice.join(', ')} le falta la variación de algún mes del índice: ` +
+      'se ajustó con lo que hay, así que el monto queda por debajo del real.',
+    );
   }
 
   if (variableArs > totalArs * 0.4 && totalArs > 0) {
@@ -155,7 +188,7 @@ export function estimar(
   return {
     periodo,
     mesesUsados: meses.length,
-    comprometidoArs, recurrenteArs, variableArs, totalArs,
+    comprometidoArs, fijoArs, recurrenteArs, variableArs, totalArs,
     lineas,
     ingresoReferenciaArs,
     ahorroEstimadoArs: ingresoReferenciaArs === null ? null : ingresoReferenciaArs - totalArs,

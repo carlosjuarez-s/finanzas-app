@@ -84,6 +84,45 @@ mira —el del mes y el anterior, porque el sueldo de un mes paga la tarjeta del
 siguiente— y nada mas: cargar el sueldo en un mes que ningun cierre lee es
 escribir un dato que despues no aparece.
 
+## Un gasto fijo declarado le gana a uno inferido
+
+La estimacion adivinaba los gastos fijos: llamaba "recurrente" a la categoria
+que aparecia en la mitad de los meses. Eso falla en las tres cosas que mas
+importan, y ninguna se arregla mirando mas historico:
+
+- **Cuando aumenta.** Un alquiler argentino sube por contrato cada seis meses,
+  y la mediana de los ultimos seis meses es el precio VIEJO.
+- **Cada cuanto cae.** Un seguro semestral aparece en dos meses de doce y queda
+  clasificado como gasto variable.
+- **Cuando termina.** Un gimnasio dado de baja sigue estimandose meses despues,
+  hasta que sale del promedio.
+
+`recurrentes` guarda esas tres como datos. La estimacion pasa a tener cuatro
+baldes, ordenados por cuanto se les puede creer: **comprometido** (cuotas
+firmadas), **fijo** (lo que declaraste), **recurrente** (lo que aparenta
+repetirse) y **variable**.
+
+Dos reglas que sostienen el numero:
+
+- **Lo declarado se RESTA del historico**, no lo reemplaza. El alquiler
+  declarado tambien esta adentro de la categoria "Alquiler" de los meses que ya
+  pasaron: sumarlo entero lo contaria dos veces. Y se resta en vez de descartar
+  la categoria, porque tener un alquiler declarado no significa que "Alquiler"
+  no tenga nada mas.
+- **Los aumentos se componen.** Dos del 10% son 21%, no 20%. Y el primer ajuste
+  cae DESPUES del primer periodo: el mes en que empezas a pagar algo pagas el
+  precio de entrada.
+
+El aumento es opcional y de dos formas, nunca las dos juntas: un **% fijo** cada
+N meses, o atado a un **indice**. Los indices los carga la persona a mano
+(`settings.indices`): **la app no sale a buscar el IPC a ningun lado**, y si a
+un indice le falta la variacion de un mes no se inventa — se ajusta con lo que
+hay y se avisa que el monto quedo por debajo. Un alquiler estimado con un IPC a
+medias es peor que uno sin ajustar, porque el error no se ve.
+
+El cuarto color del grafico apilado entro validado con
+`dataviz/scripts/validate_palette.js`, no elegido a ojo.
+
 ## No todo lo que entra es sueldo
 
 `salaries` era el unico ingreso, y eso dejaba afuera plata que entra de verdad:

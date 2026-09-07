@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { monthlyCloses, salaries } from '@/db/schema';
 import { calcularCierre, cargarPrestamos } from '@/lib/cierre';
 import { consolidar } from '@/lib/bimoneda';
+import { listar as listarFijos, leerIndices, totalDelMes as totalDeFijos } from '@/lib/recurrentes';
 import { estimar, proximoPeriodo, type MesHistorico } from '@/lib/estimacion';
 import { fmtArs, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
@@ -18,6 +19,10 @@ export const dynamic = 'force-dynamic';
 // La misma paleta validada del cierre. Acá el orden codifica confianza:
 // comprometido primero, variable último.
 const COLOR_COMPROMETIDO = '#B4690E';
+// El cuarto color entro validado, no elegido a ojo: pasa las seis pruebas de
+// scripts/validate_palette.js con los otros tres, en claro y en oscuro (peor
+// par bajo daltonismo: 14,7 de separacion contra el verde).
+const COLOR_FIJO = '#6B4E9E';
 const COLOR_RECURRENTE = '#2D5FA8';
 const COLOR_VARIABLE = '#1E7A4F';
 
@@ -67,10 +72,26 @@ export default async function Estimacion() {
       ).totalArs
     : null;
 
-  const e = estimar(periodo, historico, prestamos, ingresoRef, { tipoCambio: tcReferencia });
+  // Lo declarado le gana a lo inferido: los fijos entran con su monto y su
+  // aumento, y se restan del historico para no contarse dos veces.
+  const [fijos, indices] = await Promise.all([listarFijos(usuarioId), leerIndices(usuarioId)]);
+  const delMes = totalDeFijos(fijos, periodo, indices);
+  const fijosArs = consolidar(delMes.monto, tcReferencia).totalArs;
 
+  const e = estimar(periodo, historico, prestamos, ingresoRef, {
+    tipoCambio: tcReferencia,
+    fijos: {
+      porCategoria: delMes.porCategoria,
+      totalArs: fijosArs ?? delMes.monto.ars,
+      faltaIndice: delMes.faltaIndice,
+    },
+  });
+
+  // El orden es por cuanto se le puede creer, de mas a menos: cuota firmada,
+  // gasto fijo declarado, lo que aparenta repetirse, y lo que se adivina.
   const partes = [
     { etiqueta: 'Comprometido', valor: e.comprometidoArs, color: COLOR_COMPROMETIDO },
+    { etiqueta: 'Fijo', valor: e.fijoArs, color: COLOR_FIJO },
     { etiqueta: 'Recurrente', valor: e.recurrenteArs, color: COLOR_RECURRENTE },
     { etiqueta: 'Variable', valor: e.variableArs, color: COLOR_VARIABLE },
   ];
@@ -131,15 +152,20 @@ export default async function Estimacion() {
             datos={e.lineas.map(l => ({
               etiqueta: l.categoria,
               valor: l.montoArs,
-              nota: l.base === 'comprometido'
-                ? 'Cuotas ya firmadas'
+              // La nota dice de donde sale el numero, que es lo que decide
+              // cuanto creerle: una cuota firmada y una mediana de dos meses
+              // no valen lo mismo.
+              nota: l.base === 'comprometido' ? 'Cuotas ya firmadas'
+                : l.base === 'fijo' ? 'Lo declaraste como fijo'
                 : `Mediana de ${l.mesesConDato} ${l.mesesConDato === 1 ? 'mes' : 'meses'} · ${l.base}`,
             }))}
             formato="ars"
           />
           <p className="nota">
-            Cada categoría sale de la <strong>mediana</strong> de los últimos {e.mesesUsados} meses,
-            no del promedio: un mes con un gasto raro corre el promedio y no la mediana.
+            Lo que declaraste como fijo entra con su monto y su aumento. El resto sale de la{' '}
+            <strong>mediana</strong> de los últimos {e.mesesUsados} meses, no del promedio: un mes
+            con un gasto raro corre el promedio y no la mediana.
+            {e.fijoArs > 0 && ' Los fijos se restan del histórico para no contarse dos veces.'}
           </p>
         </section>
       )}

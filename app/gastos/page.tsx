@@ -18,6 +18,8 @@ import Pendientes from './pendientes';
 import Categorias from './categorias';
 import SueldoManual from './sueldo';
 import Ingresos, { type Fila as FilaIngreso } from './ingresos';
+import Fijos from './fijos';
+import { listar as listarFijos, leerIndices, type Recurrente, type Indice } from '@/lib/recurrentes';
 import { listar as listarIngresos } from '@/lib/ingresos';
 import Editor, { type Item } from './editor';
 import { leerCategorias } from '@/lib/categorias';
@@ -56,6 +58,8 @@ export default async function Gastos({ searchParams }: {
   let anterior = '';
   let periodos: string[] = [];
   let entradas: FilaIngreso[] = [];
+  let fijos: Recurrente[] = [];
+  let indices: Record<string, Indice> = {};
 
   async function cargarStatements(p: string) {
     return db.query.statements.findMany({
@@ -130,7 +134,7 @@ export default async function Gastos({ searchParams }: {
     const [y, m] = periodo.split('-').map(Number);
     anterior = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
 
-    [sts, sueltos, sueldo, prestamos, fiados, entradas] = await Promise.all([
+    [sts, sueltos, sueldo, prestamos, fiados, entradas, fijos, indices] = await Promise.all([
       cargarStatements(periodo),
       db.select().from(gastos).where(and(eq(gastos.usuarioId, usuarioId), eq(gastos.periodo, periodo))),
       db.query.salaries.findFirst({
@@ -140,6 +144,8 @@ export default async function Gastos({ searchParams }: {
       cargarPrestamos(usuarioId),
       cargarFiados(),
       listarIngresos(usuarioId, periodo),
+      listarFijos(usuarioId),
+      leerIndices(usuarioId),
     ]);
 
     // Lo pendiente se mira en pesos: para eso hace falta el tipo de cambio del
@@ -276,6 +282,7 @@ export default async function Gastos({ searchParams }: {
       contenido: (
         <>
           <Pendientes {...pagos} />
+          <Fijos fijos={fijos} periodo={periodo} categorias={categorias} indices={indices} />
           <Prestamos prestamos={prestamos} periodo={periodo} />
           <Fiado prestamos={fiados} hoy={hoyISO} />
         </>

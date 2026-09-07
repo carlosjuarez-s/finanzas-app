@@ -170,6 +170,36 @@ export const ingresos = pgTable('ingresos', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, t => [uniqueIndex('ingreso_usuario_file').on(t.usuarioId, t.fileId)]);
 
+// Gastos fijos: lo que se paga todos los meses, o cada dos, o cada seis.
+//
+// La estimacion los adivinaba mirando el historico, y eso falla justo donde
+// importa: no sabe cuando aumenta un alquiler, no reconoce un seguro semestral
+// —aparece en dos meses de doce y queda como gasto variable— y sigue contando
+// meses despues algo que ya diste de baja.
+//
+// Declarado, esas tres cosas son datos. Lo que no se declara se sigue
+// estimando como antes.
+export const recurrentes = pgTable('recurrentes', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
+  concepto: text('concepto').notNull(),         // "Alquiler", "Seguro del auto"
+  categoria: text('categoria').notNull(),
+  montoArs: numeric('monto_ars', { precision: 14, scale: 2 }).notNull().default('0'),
+  montoUsd: numeric('monto_usd', { precision: 12, scale: 2 }).notNull().default('0'),
+  // 1 mensual, 2 bimestral, 3 trimestral, 6 semestral, 12 anual.
+  cadaMeses: numeric('cada_meses', { precision: 3, scale: 0 }).notNull().default('1'),
+  primerPeriodo: text('primer_periodo').notNull(),  // YYYY-MM del primer pago
+  hastaPeriodo: text('hasta_periodo'),              // YYYY-MM inclusive, o null
+  // El aumento es OPCIONAL, y hay dos formas: un porcentaje fijo cada N meses
+  // —como un contrato de alquiler— o atado a un indice, y ahi el ajuste vale
+  // lo que ese indice acumulo en su ventana.
+  aumentoPct: numeric('aumento_pct', { precision: 6, scale: 2 }),
+  aumentoCadaMeses: numeric('aumento_cada_meses', { precision: 3, scale: 0 }),
+  indice: text('indice'),
+  notas: text('notas'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Prestamos y creditos. No son un gasto: son un compromiso con cronograma.
 //
 // Se guarda el plan (cuantas cuotas, de cuanto, desde cuando) y no una fila por
