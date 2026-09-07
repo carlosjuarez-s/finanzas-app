@@ -17,12 +17,10 @@ export const dynamic = 'force-dynamic';
 // La misma paleta validada del cierre. Acá el orden codifica confianza:
 // comprometido primero, variable último.
 const COLOR_COMPROMETIDO = '#B4690E';
-// El cuarto color entro validado, no elegido a ojo: pasa las seis pruebas de
+// El segundo color entro validado, no elegido a ojo: pasa las seis pruebas de
 // scripts/validate_palette.js con los otros tres, en claro y en oscuro (peor
 // par bajo daltonismo: 14,7 de separacion contra el verde).
 const COLOR_FIJO = '#6B4E9E';
-const COLOR_RECURRENTE = '#2D5FA8';
-const COLOR_VARIABLE = '#1E7A4F';
 
 export default async function Estimacion({ searchParams }: {
   searchParams: Promise<{ periodo?: string }>;
@@ -57,11 +55,14 @@ export default async function Estimacion({ searchParams }: {
 
   // El orden es por cuanto se le puede creer, de mas a menos: cuota firmada,
   // gasto fijo declarado, lo que aparenta repetirse, y lo que se adivina.
+  const enElTotal = e.lineas.filter(l => l.enElTotal);
+  const referencia = e.lineas.filter(l => !l.enElTotal);
+
+  // Solo las dos que entran al total. La referencia se muestra aparte y no se
+  // grafica junto a estas: pintarla igual la haria parecer parte del numero.
   const partes = [
-    { etiqueta: 'Comprometido', valor: e.comprometidoArs, color: COLOR_COMPROMETIDO },
-    { etiqueta: 'Fijo', valor: e.fijoArs, color: COLOR_FIJO },
-    { etiqueta: 'Recurrente', valor: e.recurrenteArs, color: COLOR_RECURRENTE },
-    { etiqueta: 'Variable', valor: e.variableArs, color: COLOR_VARIABLE },
+    { etiqueta: 'Cuotas', valor: e.comprometidoArs, color: COLOR_COMPROMETIDO },
+    { etiqueta: 'Fijos', valor: e.fijoArs, color: COLOR_FIJO },
   ];
 
   return (
@@ -88,13 +89,15 @@ export default async function Estimacion({ searchParams }: {
       )}
 
       <div className="ledger">
+        {/* Sin el "≈": no es una aproximacion, es la suma de cosas declaradas.
+            Lo aproximado es la referencia, y va aparte. */}
         <div className="celda">
-          <p className="eyebrow">Vas a gastar</p>
-          <p className="valor ars">≈ {fmtArs(e.totalArs)}</p>
+          <p className="eyebrow">Sale sí o sí</p>
+          <p className="valor ars">{fmtArs(e.totalArs)}</p>
         </div>
         <div className="op">·</div>
         <div className="celda">
-          <p className="eyebrow">Ya comprometido</p>
+          <p className="eyebrow">De eso, cuotas</p>
           <p className="valor ars">{fmtArs(e.comprometidoArs)}</p>
         </div>
         <div className="op">·</div>
@@ -124,27 +127,48 @@ export default async function Estimacion({ searchParams }: {
         </section>
       )}
 
-      {e.lineas.length > 0 && (
+      {/* Dos listas separadas, no una. En una sola tabla ordenada por monto,
+          una mediana de dos meses queda arriba de una cuota firmada y las dos
+          se leen igual. */}
+      {enElTotal.length > 0 && (
         <section>
-          <h2>Por categoría</h2>
+          <h2>Lo que sale sí o sí</h2>
           <BarChart
-            datos={e.lineas.map(l => ({
+            datos={enElTotal.map(l => ({
               etiqueta: l.categoria,
               valor: l.montoArs,
-              // La nota dice de donde sale el numero, que es lo que decide
-              // cuanto creerle: una cuota firmada y una mediana de dos meses
-              // no valen lo mismo.
-              nota: l.base === 'comprometido' ? 'Cuotas ya firmadas'
-                : l.base === 'fijo' ? 'Lo declaraste como fijo'
-                : `Mediana de ${l.mesesConDato} ${l.mesesConDato === 1 ? 'mes' : 'meses'} · ${l.base}`,
+              nota: l.base === 'comprometido' ? 'Cuota ya firmada' : 'Lo declaraste como fijo',
+            }))}
+            formato="ars"
+          />
+        </section>
+      )}
+
+      {referencia.length > 0 && (
+        <section>
+          <h2>
+            Además, según tu historial
+            <span className="chip">{fmtArs(e.referenciaArs)}</span>
+          </h2>
+          <p className="resultado">
+            Esto <strong>no</strong> entra en el total de arriba: es lo único del cálculo que
+            nadie declaró. Con esto sumado, el mes probablemente termine en{' '}
+            <strong className="monto ars">{fmtArs(e.probableArs)}</strong>.
+          </p>
+          <BarChart
+            datos={referencia.map(l => ({
+              etiqueta: l.categoria,
+              valor: l.montoArs,
+              nota: `Mediana de ${l.mesesConDato} ${l.mesesConDato === 1 ? 'mes' : 'meses'} · ${l.base}`,
             }))}
             formato="ars"
           />
           <p className="nota">
-            Lo que declaraste como fijo entra con su monto y su aumento. El resto sale de la{' '}
-            <strong>mediana</strong> de los últimos {e.mesesUsados} meses, no del promedio: un mes
-            con un gasto raro corre el promedio y no la mediana.
-            {e.fijoArs > 0 && ' Los fijos se restan del histórico para no contarse dos veces.'}
+            Sale de la <strong>mediana</strong> de los últimos {e.mesesUsados} meses, no del
+            promedio: un mes con un gasto raro corre el promedio y no la mediana.
+            {e.fijoArs > 0 && ' Y se le resta lo que ya declaraste como fijo, para no contarlo dos veces.'}{' '}
+            Lo que veas repetirse acá, <Link href={`/gastos?periodo=${periodo}`}>declaralo como fijo</Link>{' '}
+            y pasa al total.
           </p>
         </section>
       )}

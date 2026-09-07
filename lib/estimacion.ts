@@ -9,21 +9,24 @@ import { consolidar } from './bimoneda';
  * mezclar ahi un numero inventado contamina los promedios que despues alimentan
  * la proxima estimacion — el error se realimenta y crece solo.
  *
- * Se arma de tres pedazos, y cada uno se reporta por separado porque tienen
- * confianza muy distinta:
+ * **El total son solo las cosas que sabes**, no las que se adivinan:
  *
- *   COMPROMETIDO  las cuotas que ya sabes que caen. No es una prediccion: esta
- *                 firmado. Es la parte que se puede afirmar.
- *   FIJO          los gastos que declaraste como recurrentes, con su monto y
- *                 su aumento. Tampoco es una prediccion: lo dijiste vos.
- *   RECURRENTE    lo que APARENTA repetirse en el historico y no declaraste. Se
- *                 estima con la MEDIANA, no el promedio: un mes con un gasto
- *                 raro corre el promedio y no la mediana.
- *   VARIABLE      el resto. Es lo que peor se predice y hay que decirlo.
+ *   COMPROMETIDO  las cuotas que ya caen. Esta firmado.
+ *   FIJO          los gastos que declaraste, con su monto y su aumento,
+ *                 resueltos mes a mes. Lo dijiste vos.
  *
- * Lo declarado le gana a lo inferido, y hay que **restarlo** del historico o se
- * cuenta dos veces: el alquiler que declaraste tambien esta en la categoria
- * "Alquiler" de los meses que ya pasaron.
+ * Y nada mas. El historico **no entra al total**. Se calcula igual y se muestra
+ * al lado como REFERENCIA, porque saber que ademas solés gastar medio millon
+ * en supermercado es informacion que uno quiere; pero es lo unico del calculo
+ * que nadie afirmo, y sumarlo convertia un compromiso verificable en un
+ * pronostico que no se puede auditar.
+ *
+ * La consecuencia, y hay que decirla: **el total es un piso, no un pronostico
+ * del gasto del mes**. Es lo que va a salir sí o sí. Lo que se gasta arriba de
+ * eso esta en la referencia.
+ *
+ * De la referencia se resta lo declarado o se cuenta dos veces: el alquiler que
+ * declaraste tambien esta en la categoria "Alquiler" de los meses pasados.
  */
 
 export type MesHistorico = {
@@ -37,6 +40,8 @@ export type LineaEstimada = {
   montoArs: number;
   /** De donde sale: cambia cuanto se le puede creer. */
   base: 'comprometido' | 'fijo' | 'recurrente' | 'variable';
+  /** True si esta linea entra al total. Las de referencia no. */
+  enElTotal: boolean;
   /** En cuantos de los meses mirados aparecio. */
   mesesConDato: number;
 };
@@ -46,9 +51,14 @@ export type Estimacion = {
   mesesUsados: number;
   comprometidoArs: number;
   fijoArs: number;
+  /** El total: comprometido + fijo. Nada mas. Es un piso, no un pronostico. */
+  totalArs: number;
+  /** Lo que el historico dice que ademas gastas, FUERA del total. */
   recurrenteArs: number;
   variableArs: number;
-  totalArs: number;
+  referenciaArs: number;
+  /** Total + referencia. Lo que probablemente termine saliendo el mes. */
+  probableArs: number;
   lineas: LineaEstimada[];
   /** Ingreso de referencia: el ultimo conocido, sin proyectar aumentos. */
   ingresoReferenciaArs: number | null;
@@ -142,37 +152,52 @@ export function estimar(
     const frecuencia = valores.length / meses.length;
     const base = frecuencia >= RECURRENTE ? 'recurrente' : 'variable';
 
-    lineas.push({ categoria, montoArs, base, mesesConDato: valores.length });
+    // No entra al total: es referencia. El historico es lo unico del calculo
+    // que nadie afirmo.
+    lineas.push({ categoria, montoArs, base, mesesConDato: valores.length, enElTotal: false });
     if (base === 'recurrente') recurrenteArs += montoArs;
     else variableArs += montoArs;
   }
 
   for (const [categoria, montoArs] of Object.entries(fijos.porCategoria)) {
     if (montoArs > 0) {
-      lineas.push({ categoria: `${categoria} (fijo)`, montoArs, base: 'fijo', mesesConDato: meses.length });
+      lineas.push({ categoria, montoArs, base: 'fijo', mesesConDato: meses.length, enElTotal: true });
     }
   }
 
   if (comprometidoArs > 0) {
     lineas.push({
       categoria: 'Cuotas comprometidas', montoArs: comprometidoArs,
-      base: 'comprometido', mesesConDato: meses.length,
+      base: 'comprometido', mesesConDato: meses.length, enElTotal: true,
     });
   }
 
   lineas.sort((a, b) => b.montoArs - a.montoArs);
 
-  const totalArs = comprometidoArs + fijoArs + recurrenteArs + variableArs;
+  // Solo lo que se sabe. El historico queda afuera, a proposito.
+  const totalArs = comprometidoArs + fijoArs;
+  const referenciaArs = recurrenteArs + variableArs;
+  const probableArs = totalArs + referenciaArs;
 
   // --- Lo que hay que decir para que el numero no se lea de mas ----------
-  if (!meses.length) {
-    advertencias.push('No hay ningún mes cerrado todavía: esto es solo lo que ya está comprometido en cuotas.');
-  } else if (meses.length < 3) {
-    advertencias.push(`Con ${meses.length} ${meses.length === 1 ? 'mes' : 'meses'} de historial la estimación es floja. Se afina sola con cada mes que cierres.`);
+
+  // La primera, y la que mas importa en este modelo: sin fijos declarados el
+  // total son las cuotas y nada mas, y eso NO es lo que va a gastar la persona.
+  if (fijoArs === 0) {
+    advertencias.push(
+      comprometidoArs > 0
+        ? 'No declaraste ningún gasto fijo, así que el total son solo tus cuotas. Cargá el alquiler, los servicios y lo que pagues todos los meses en Gastos → Debo.'
+        : 'No hay nada declarado todavía: ni cuotas ni gastos fijos. Cargá tus fijos en Gastos → Debo y este número empieza a servir.',
+    );
   }
 
-  if (historico.some(m => m.gastoTotalArs === null)) {
-    advertencias.push('Hay meses sin tipo de cambio cargado y quedaron afuera del cálculo.');
+  // El total es un piso. Si lo de afuera pesa mas que lo de adentro, el piso
+  // dice poco sobre el mes, y hay que decirlo antes de que alguien planifique
+  // con el.
+  if (referenciaArs > totalArs && referenciaArs > 0) {
+    advertencias.push(
+      'Lo que gastás fuera de los fijos pesa más que los fijos mismos. El total de arriba es un piso: mirá el "probable" para tener el número completo.',
+    );
   }
 
   if (fijos.faltaIndice.length) {
@@ -182,8 +207,13 @@ export function estimar(
     );
   }
 
-  if (variableArs > totalArs * 0.4 && totalArs > 0) {
-    advertencias.push('Más del 40% es gasto variable, que es la parte que peor se predice.');
+  // Las que siguen son sobre la referencia, no sobre el total.
+  if (meses.length && meses.length < 3) {
+    advertencias.push(`La referencia sale de ${meses.length} ${meses.length === 1 ? 'mes' : 'meses'} de historial, que es poco. Se afina sola con cada mes que cierres.`);
+  }
+
+  if (historico.some(m => m.gastoTotalArs === null)) {
+    advertencias.push('Hay meses sin tipo de cambio cargado y quedaron afuera de la referencia.');
   }
 
   if (ingresoReferenciaArs === null) {
@@ -193,7 +223,8 @@ export function estimar(
   return {
     periodo,
     mesesUsados: meses.length,
-    comprometidoArs, fijoArs, recurrenteArs, variableArs, totalArs,
+    comprometidoArs, fijoArs, totalArs,
+    recurrenteArs, variableArs, referenciaArs, probableArs,
     lineas,
     ingresoReferenciaArs,
     periodoDelIngreso: opciones.periodoDelIngreso ?? null,

@@ -6,11 +6,12 @@ import Monto from './monto';
 
 // La misma paleta validada de la pantalla de estimacion. El orden codifica
 // confianza: comprometido primero, variable ultimo.
+// Solo las dos que entran al total. La referencia no se grafica acá: pintarla
+// del mismo tamaño la haria parecer parte del numero, que es justo lo que se
+// decidio que no sea.
 const PARTES = [
-  { clave: 'comprometidoArs', etiqueta: 'Comprometido', color: '#B4690E' },
-  { clave: 'fijoArs', etiqueta: 'Fijo', color: '#6B4E9E' },
-  { clave: 'recurrenteArs', etiqueta: 'Recurrente', color: '#2D5FA8' },
-  { clave: 'variableArs', etiqueta: 'Variable', color: '#1E7A4F' },
+  { clave: 'comprometidoArs', etiqueta: 'Cuotas', color: '#B4690E' },
+  { clave: 'fijoArs', etiqueta: 'Fijos', color: '#6B4E9E' },
 ] as const;
 
 /**
@@ -20,6 +21,11 @@ const PARTES = [
  * tiene todos —recien los vas cargando— y hasta ahora la pantalla mostraba lo
  * poco que hubiera como si fuera el mes entero: un mes con dos gastos cargados
  * se veia como un mes de ahorro altisimo.
+ *
+ * El numero grande es **lo que sale si o si**: cuotas mas gastos fijos. Es un
+ * piso, no un pronostico. Lo que el historial dice que ademas se gasta va
+ * abajo, mas chico y con otro nombre: es lo unico del calculo que nadie
+ * afirmo, y mezclarlo convertia un compromiso verificable en una adivinanza.
  *
  * Esto **no se guarda**. Se calcula al vuelo cada vez, y se muestra separado
  * de lo cargado para que no haya forma de confundir uno con otro.
@@ -50,7 +56,7 @@ export default function Estimado({ e, periodo, cargadoArs, hayDatos }: {
 
       <div className="ledger">
         <div className="celda">
-          <p className="eyebrow">Vas a gastar</p>
+          <p className="eyebrow">Sale sí o sí</p>
           <p className="valor ars">{fmtArs(e.totalArs)}</p>
           {avance !== null && (
             <p className="monto" style={{ fontSize: 12 }}>
@@ -78,6 +84,24 @@ export default function Estimado({ e, periodo, cargadoArs, hayDatos }: {
       </div>
 
       {partes.length > 0 && <StackedBar partes={partes} total={e.totalArs} formato="ars" />}
+
+      {/* La referencia va abajo y aparte. Sumarla al total convertia un
+          compromiso en un pronostico; esconderla dejaba a alguien planificando
+          con un piso creyendo que era el techo. */}
+      {e.referenciaArs > 0 && (
+        <div className="referencia">
+          <p className="eyebrow">Además, mirando tu historial</p>
+          <p>
+            En los últimos {e.mesesUsados} {e.mesesUsados === 1 ? 'mes' : 'meses'} gastaste{' '}
+            <strong className="monto ars">{fmtArs(e.referenciaArs)}</strong> por fuera de los
+            fijos. Sumándolo, el mes probablemente termine en{' '}
+            <strong className="monto ars">{fmtArs(e.probableArs)}</strong>.
+          </p>
+          <p className="nota">
+            Esto no entra en el número de arriba: es lo único del cálculo que nadie declaró.
+          </p>
+        </div>
+      )}
 
       {/* El sueldo es un supuesto, no un dato: hay que poder ir a corregirlo
           sin salir a buscar donde. */}

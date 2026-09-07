@@ -676,3 +676,13 @@ section > h2 {
   background: var(--papel-alto);
 }
 .estimado > h2 { border-bottom-style: dashed; }
+
+/* La referencia del historial: adentro del bloque estimado pero visiblemente
+   subordinada. No es parte del total y no puede parecerlo. */
+.referencia {
+  border-top: 1px dashed var(--linea);
+  margin-top: 14px; padding-top: 12px;
+  font-size: 14px; color: var(--tinta-suave);
+}
+.referencia strong { font-weight: 600; }
+.referencia .nota { margin-bottom: 0; }

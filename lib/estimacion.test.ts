@@ -66,17 +66,19 @@ test('una cuota que ya termino no se estima', () => {
   assert.equal(e.comprometidoArs, 0);
 });
 
-test('el total es la suma de las tres partes', () => {
+test('el total son comprometido y fijo; el historico va al probable', () => {
   const e = estimar('2026-09', SEIS, [credito], 2_000_000);
-  assert.equal(e.totalArs, e.comprometidoArs + e.recurrenteArs + e.variableArs);
+  assert.equal(e.totalArs, e.comprometidoArs + e.fijoArs);
+  assert.equal(e.referenciaArs, e.recurrenteArs + e.variableArs);
+  assert.equal(e.probableArs, e.totalArs + e.referenciaArs);
   assert.equal(e.ahorroEstimadoArs, 2_000_000 - e.totalArs);
 });
 
-test('sin historial solo se afirma lo comprometido, y se avisa', () => {
+test('sin fijos declarados el total son solo las cuotas, y se avisa', () => {
   const e = estimar('2026-09', [], [credito], 2_000_000);
   assert.equal(e.totalArs, 45_000);
   assert.equal(e.mesesUsados, 0);
-  assert.match(e.advertencias.join(' '), /No hay ningún mes cerrado/);
+  assert.match(e.advertencias.join(' '), /solo tus cuotas/);
 });
 
 test('con poco historial se dice que la estimacion es floja', () => {
@@ -125,9 +127,9 @@ test('sin tipo de cambio, la cuota en dolares queda afuera y se avisa', () => {
   assert.ok(e.advertencias.some(a => /dólares/.test(a)), e.advertencias.join(' | '));
 });
 
-test('un gasto fijo declarado no se cuenta dos veces', () => {
-  // El alquiler declarado tambien esta adentro de la categoria "Alquiler" de
-  // los meses que ya pasaron: sumarlo entero seria contarlo dos veces.
+test('el total son los fijos y las cuotas: el historico NO entra', () => {
+  // Es la decision que define esta pantalla. El total es un piso —lo que sale
+  // si o si— y no un pronostico del gasto del mes.
   const historico = [
     { periodo: '2026-06', gastoTotalArs: 600_000, porCategoria: { Alquiler: 500_000, Servicios: 100_000 } },
     { periodo: '2026-07', gastoTotalArs: 600_000, porCategoria: { Alquiler: 500_000, Servicios: 100_000 } },
@@ -136,32 +138,55 @@ test('un gasto fijo declarado no se cuenta dos veces', () => {
   const fijos = { porCategoria: { Alquiler: 550_000 }, totalArs: 550_000, faltaIndice: [] };
   const e = estimar('2026-09', historico, [], null, { fijos });
 
-  // 550.000 del fijo (ya con el aumento) + 100.000 de servicios. El alquiler
-  // viejo de la mediana no se suma encima.
   assert.equal(e.fijoArs, 550_000);
-  assert.equal(e.totalArs, 650_000);
+  assert.equal(e.totalArs, 550_000);
+  // Los 100.000 de servicios estan, pero afuera del total.
+  assert.equal(e.referenciaArs, 100_000);
+  assert.equal(e.probableArs, 650_000);
 });
 
-test('un fijo no borra lo variable que comparte categoria', () => {
-  // Descartar la categoria entera perderia lo que no es el fijo: tener un
-  // alquiler declarado no significa que "Alquiler" no tenga nada mas.
+test('la referencia descuenta lo declarado, o lo contaria dos veces', () => {
+  // El alquiler declarado tambien esta adentro de la categoria "Alquiler" de
+  // los meses que ya pasaron.
   const historico = [
     { periodo: '2026-07', gastoTotalArs: 620_000, porCategoria: { Alquiler: 620_000 } },
     { periodo: '2026-08', gastoTotalArs: 620_000, porCategoria: { Alquiler: 620_000 } },
   ];
   const fijos = { porCategoria: { Alquiler: 500_000 }, totalArs: 500_000, faltaIndice: [] };
   const e = estimar('2026-09', historico, [], null, { fijos });
-  assert.equal(e.totalArs, 620_000);
+  assert.equal(e.totalArs, 500_000);
+  assert.equal(e.referenciaArs, 120_000);
 });
 
-test('sin fijos declarados la estimacion se comporta como antes', () => {
+test('sin fijos declarados el total es cero, y se avisa', () => {
+  // Antes esto devolvia la mediana del historico y parecia una estimacion. Es
+  // peor: un numero que parece completo cuando no hay nada declarado.
   const historico = [
     { periodo: '2026-07', gastoTotalArs: 600_000, porCategoria: { Alquiler: 500_000 } },
     { periodo: '2026-08', gastoTotalArs: 600_000, porCategoria: { Alquiler: 500_000 } },
   ];
   const e = estimar('2026-09', historico, [], null);
   assert.equal(e.fijoArs, 0);
-  assert.equal(e.totalArs, 500_000);
+  assert.equal(e.totalArs, 0);
+  assert.equal(e.referenciaArs, 500_000);
+  assert.ok(e.advertencias.some(a => /No hay nada declarado/.test(a)), e.advertencias.join(' | '));
+});
+
+test('el ahorro estimado se calcula contra el total, no contra el probable', () => {
+  // El total es lo que sale si o si: contra eso se mide lo que queda libre.
+  const fijos = { porCategoria: { Alquiler: 500_000 }, totalArs: 500_000, faltaIndice: [] };
+  const e = estimar('2026-09', [], [], 1_500_000, { fijos });
+  assert.equal(e.ahorroEstimadoArs, 1_000_000);
+});
+
+test('avisa cuando lo de afuera pesa mas que los fijos', () => {
+  const historico = [
+    { periodo: '2026-07', gastoTotalArs: 900_000, porCategoria: { Supermercado: 900_000 } },
+    { periodo: '2026-08', gastoTotalArs: 900_000, porCategoria: { Supermercado: 900_000 } },
+  ];
+  const fijos = { porCategoria: { Alquiler: 100_000 }, totalArs: 100_000, faltaIndice: [] };
+  const e = estimar('2026-09', historico, [], null, { fijos });
+  assert.ok(e.advertencias.some(a => /pesa más que los fijos/.test(a)), e.advertencias.join(' | '));
 });
 
 test('si al indice de un fijo le falto un mes, se avisa', () => {

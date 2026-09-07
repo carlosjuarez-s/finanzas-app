@@ -84,6 +84,29 @@ mira —el del mes y el anterior, porque el sueldo de un mes paga la tarjeta del
 siguiente— y nada mas: cargar el sueldo en un mes que ningun cierre lee es
 escribir un dato que despues no aparece.
 
+## La estimacion son los fijos, no un pronostico
+
+El total de la estimacion es **comprometido + fijo**, y nada mas: las cuotas
+que ya caen y los gastos que declaraste, resueltos mes a mes con su aumento.
+Es un **piso** —lo que va a salir si o si— y no un pronostico del gasto del
+mes.
+
+El historico se calcula igual pero **no entra al total**. Va abajo, mas chico,
+como REFERENCIA: "ademas, en los ultimos 6 meses gastaste X por fuera de los
+fijos, asi que el mes probablemente termine en Y". Es lo unico del calculo que
+nadie afirmo, y sumarlo convertia un compromiso verificable en un pronostico
+que no se puede auditar.
+
+Las dos mitades se muestran separadas a proposito. En una sola tabla ordenada
+por monto, una mediana de dos meses queda arriba de una cuota firmada y las dos
+se leen igual.
+
+Lo que se ve repetirse en la referencia se declara como fijo y **pasa al
+total**: ese es el camino que la pantalla propone, con el link puesto.
+
+Sin fijos declarados el total son solo las cuotas, y eso se avisa fuerte: un
+numero que parece completo cuando no hay nada declarado es peor que un cero.
+
 ## El mes que no cerro se estima, y se dice que es una estimacion
 
 Un cierre son datos reales de un mes que ya paso. El mes en curso no los tiene
