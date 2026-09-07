@@ -6,7 +6,7 @@ import { estadoDePagos, type EstadoDePagos } from '@/lib/pagos';
 import { consolidar } from '@/lib/bimoneda';
 import { totalDelMes, type Prestamo } from '@/lib/prestamos';
 import type { PrestamoPersonal } from '@/lib/fiado';
-import { fmtArs, fmtPeriodo } from '@/lib/formato';
+import { fmtArs, fmtCorto, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
@@ -24,6 +24,7 @@ import { leerCategorias } from '@/lib/categorias';
 import { periodosConDatos } from '@/lib/periodos';
 import SelectorMes from '../selector-mes';
 import FiltroCategoria from './filtro-categoria';
+import Secciones, { type Seccion } from '../secciones';
 import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
@@ -192,6 +193,101 @@ export default async function Gastos({ searchParams }: {
   const visiblesGastos = itemsGastos.filter(coincide);
   const visiblesConsumos = itemsConsumos.filter(coincide);
 
+  // Cuatro pestañas en vez de diez secciones apiladas. El agrupamiento es por
+  // pregunta, no por tabla: "en que se me fue", "que entro", "que debo",
+  // "como esta configurado".
+  const SECCIONES: Seccion[] = [
+    {
+      clave: 'gastos',
+      titulo: 'Se fue',
+      // Corto y no el monto entero: "$ 2.647.677,00" en la pestaña se comia la
+      // tira en un telefono y empujaba las otras tres fuera de pantalla.
+      chip: '$ ' + fmtCorto(visiblesGastos.reduce((s, i) => s + i.monto, 0) + visiblesConsumos.reduce((s, i) => s + i.monto, 0)),
+      contenido: (
+        <>
+          {porCategoria.length > 1 && (
+            <section>
+              <h2>Gasto del mes por categoría</h2>
+              <BarChart datos={porCategoria} formato="ars" />
+              {sinConvertir > 0 && (
+                <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
+                  {sinConvertir === 1 ? 'Un gasto en dólares no está' : `${sinConvertir} gastos en dólares no están`} en
+                  este gráfico: falta el tipo de cambio del mes y no se pueden pasar a pesos.
+                  Cargalo en Supuestos.
+                </p>
+              )}
+            </section>
+          )}
+
+          <GastoTexto />
+
+          <section>
+            <h2>
+              Servicios, alquiler y otros
+              <span className="chip">{fmtArs(visiblesGastos.reduce((s, i) => s + i.monto, 0))}</span>
+            </h2>
+            {visiblesGastos.length
+              ? visiblesGastos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)
+              : <p className="resultado">
+                  {filtro
+                    ? `Ningún gasto suelto de este mes es de «${filtro}».`
+                    : 'Todavía no hay gastos fuera de la tarjeta en este mes.'}
+                </p>}
+          </section>
+
+          {visiblesConsumos.length > 0 && (
+            <section>
+              <h2>Consumos de tarjeta</h2>
+              <p className="resultado">
+                Corregir una línea reacomoda el desglose por categoría. El total del mes sigue
+                saliendo del «TOTAL A PAGAR» del resumen, que es el número que efectivamente pagás.
+              </p>
+              {visiblesConsumos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)}
+            </section>
+          )}
+        </>
+      ),
+    },
+    {
+      clave: 'entra',
+      titulo: 'Entró',
+      contenido: (
+        <>
+          <SueldoManual
+            periodo={periodo}
+            anterior={anterior}
+            tipoCambio={tc}
+            actual={sueldo ? {
+              periodo: sueldo.periodo,
+              netoArs: Number(sueldo.netoArs),
+              netoUsd: Number(sueldo.netoUsd),
+              corregido: sueldo.corregido,
+            } : null}
+          />
+          <Ingresos periodo={periodo} filas={entradas} />
+        </>
+      ),
+    },
+    {
+      clave: 'debo',
+      titulo: 'Debo',
+      chip: pagos.pendientes.length ? String(pagos.pendientes.length) : undefined,
+      chipCorto: true,
+      contenido: (
+        <>
+          <Pendientes {...pagos} />
+          <Prestamos prestamos={prestamos} periodo={periodo} />
+          <Fiado prestamos={fiados} hoy={hoyISO} />
+        </>
+      ),
+    },
+    {
+      clave: 'ajustes',
+      titulo: 'Ajustes',
+      contenido: <Categorias categorias={categorias} />,
+    },
+  ];
+
   return (
     <main>
       <Nav />
@@ -214,68 +310,9 @@ export default async function Gastos({ searchParams }: {
         />
       )}
 
-      {porCategoria.length > 1 && (
-        <section>
-          <h2>Gasto del mes por categoría</h2>
-          <BarChart datos={porCategoria} formato="ars" />
-          {sinConvertir > 0 && (
-            <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
-              {sinConvertir === 1 ? 'Un gasto en dólares no está' : `${sinConvertir} gastos en dólares no están`} en
-              este gráfico: falta el tipo de cambio del mes y no se pueden pasar a pesos.
-              Cargalo en Supuestos.
-            </p>
-          )}
-        </section>
-      )}
-
-      <GastoTexto />
-
-      <Pendientes {...pagos} />
-
-      <Prestamos prestamos={prestamos} periodo={periodo} />
-
-      <Fiado prestamos={fiados} hoy={hoyISO} />
-
-      <Categorias categorias={categorias} />
-
-      <section>
-        <h2>
-          Servicios, alquiler y otros
-          <span className="chip">{fmtArs(visiblesGastos.reduce((s, i) => s + i.monto, 0))}</span>
-        </h2>
-        {visiblesGastos.length
-          ? visiblesGastos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)
-          : <p className="resultado">
-              {filtro
-                ? `Ningún gasto suelto de este mes es de «${filtro}».`
-                : 'Todavía no hay gastos fuera de la tarjeta en este mes.'}
-            </p>}
-      </section>
-
-      <SueldoManual
-        periodo={periodo}
-        anterior={anterior}
-        tipoCambio={tc}
-        actual={sueldo ? {
-          periodo: sueldo.periodo,
-          netoArs: Number(sueldo.netoArs),
-          netoUsd: Number(sueldo.netoUsd),
-          corregido: sueldo.corregido,
-        } : null}
-      />
-
-      <Ingresos periodo={periodo} filas={entradas} />
-
-      {visiblesConsumos.length > 0 && (
-        <section>
-          <h2>Consumos de tarjeta</h2>
-          <p className="resultado">
-            Corregir una línea reacomoda el desglose por categoría. El total del mes sigue
-            saliendo del «TOTAL A PAGAR» del resumen, que es el número que efectivamente pagás.
-          </p>
-          {visiblesConsumos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)}
-        </section>
-      )}
+      {/* Llegando con un filtro, la pestaña util es la de los gastos: abrir en
+          otra obligaria a buscar lo que uno vino a ver. */}
+      <Secciones secciones={SECCIONES} inicial={filtro ? 'gastos' : undefined} />
     </main>
   );
 }

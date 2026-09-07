@@ -286,6 +286,35 @@ no solo verde.
 
 Cuando agregues estado nuevo, preguntate si se distingue en blanco y negro.
 
+## Navegacion: barra lateral arriba de 980px
+
+El nav de arriba se lleva tres renglones antes de que empiece el contenido, y
+en un monitor esos renglones son la parte mas valiosa de la pantalla. A partir
+de 980px pasa a una barra fija a la izquierda: la columna de contenido ya tenia
+un maximo de 720px y el espacio de la izquierda estaba vacio.
+
+El corte es 980 y no 768: entre medio, 196px de barra dejan la columna
+demasiado angosta y es peor que el nav de arriba.
+
+**Abajo de 980px no cambia nada.** El nav agrupado y la barra del pulgar estan
+medidos en un iPhone SE y funcionan; la barra lateral no los toca.
+
+## Pestañas: agrupar por pregunta, no por tabla
+
+La pagina del mes tenia diez secciones apiladas: para corregir un consumo habia
+que pasar por los prestamos, lo que te deben y las categorias. Ahora son cuatro
+pestañas —**Se fue, Entro, Debo, Ajustes**— y el corte es por la pregunta que
+uno viene a hacerse, no por que tabla lo guarda.
+
+Eso importa porque **antd desmonta el panel inactivo**: un formulario a medio
+escribir en otra pestaña se pierde, y Ctrl+F no encuentra lo que esta cerrado.
+Lo que se usa junto tiene que quedar junto, o el corte se paga cada vez.
+
+Los rotulos son cortos y el monto del total **no** va en la pestaña en el
+telefono: medido, cuatro pestañas con el monto entero ocupaban 559px en una
+pantalla de 375 y empujaban tres fuera de vista. Un contador chico si se queda
+—"3 cosas sin pagar" es justo lo que uno quiere ver sin abrir.
+
 ## Navegacion
 
 Nueve secciones sueltas son nueve palabras indistinguibles. Van en **tres grupos
