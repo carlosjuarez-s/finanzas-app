@@ -142,6 +142,34 @@ export const gastos = pgTable('gastos', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, t => [uniqueIndex('gasto_usuario_file').on(t.usuarioId, t.fileId)]);
 
+// Plata que entra y NO es sueldo.
+//
+// Existia un solo tipo de ingreso —el recibo— y eso dejaba afuera cosas que
+// entran de verdad: la ganancia de una inversion, lo que te devuelve alguien a
+// quien le pagaste algo, un extra. Sin lugar donde ponerlas, esos meses
+// mostraban una tasa de ahorro peor que la real.
+//
+// Tabla aparte de `salaries` y no una fila mas ahi: un sueldo es uno por mes y
+// tiene periodo unico; de esto puede haber varios en el mismo mes. Y aparte de
+// `gastos` con monto negativo, que era el parche: un gasto negativo ensucia el
+// desglose por categoria y aparece en "falta pagar".
+export const ingresos = pgTable('ingresos', {
+  id: text('id').primaryKey().$defaultFn(createId),
+  usuarioId: duenio(),
+  periodo: text('periodo').notNull(),           // YYYY-MM al que imputa
+  fecha: text('fecha'),                         // YYYY-MM-DD si se sabe
+  concepto: text('concepto').notNull(),         // "Venta de USDT", "Naranja me devolvio"
+  // GANANCIA: rindio una inversion. REINTEGRO: te devolvieron plata que pusiste.
+  // EXTRA: cualquier otra entrada que no sea el sueldo.
+  tipo: text('tipo').notNull().default('EXTRA'),
+  montoArs: numeric('monto_ars', { precision: 14, scale: 2 }).notNull().default('0'),
+  montoUsd: numeric('monto_usd', { precision: 12, scale: 2 }).notNull().default('0'),
+  origen: text('origen').notNull().default('MANUAL'),
+  fileId: text('file_id'),
+  notas: text('notas'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, t => [uniqueIndex('ingreso_usuario_file').on(t.usuarioId, t.fileId)]);
+
 // Prestamos y creditos. No son un gasto: son un compromiso con cronograma.
 //
 // Se guarda el plan (cuantas cuotas, de cuanto, desde cuando) y no una fila por

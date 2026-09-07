@@ -17,6 +17,8 @@ import Fiado from './fiado';
 import Pendientes from './pendientes';
 import Categorias from './categorias';
 import SueldoManual from './sueldo';
+import Ingresos, { type Fila as FilaIngreso } from './ingresos';
+import { listar as listarIngresos } from '@/lib/ingresos';
 import Editor, { type Item } from './editor';
 import { leerCategorias } from '@/lib/categorias';
 import { periodosConDatos } from '@/lib/periodos';
@@ -52,6 +54,7 @@ export default async function Gastos({ searchParams }: {
   let tc: number | null = null;
   let anterior = '';
   let periodos: string[] = [];
+  let entradas: FilaIngreso[] = [];
 
   async function cargarStatements(p: string) {
     return db.query.statements.findMany({
@@ -126,7 +129,7 @@ export default async function Gastos({ searchParams }: {
     const [y, m] = periodo.split('-').map(Number);
     anterior = `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
 
-    [sts, sueltos, sueldo, prestamos, fiados] = await Promise.all([
+    [sts, sueltos, sueldo, prestamos, fiados, entradas] = await Promise.all([
       cargarStatements(periodo),
       db.select().from(gastos).where(and(eq(gastos.usuarioId, usuarioId), eq(gastos.periodo, periodo))),
       db.query.salaries.findFirst({
@@ -135,6 +138,7 @@ export default async function Gastos({ searchParams }: {
       }),
       cargarPrestamos(usuarioId),
       cargarFiados(),
+      listarIngresos(usuarioId, periodo),
     ]);
 
     // Lo pendiente se mira en pesos: para eso hace falta el tipo de cambio del
@@ -259,6 +263,8 @@ export default async function Gastos({ searchParams }: {
           corregido: sueldo.corregido,
         } : null}
       />
+
+      <Ingresos periodo={periodo} filas={entradas} />
 
       {visiblesConsumos.length > 0 && (
         <section>

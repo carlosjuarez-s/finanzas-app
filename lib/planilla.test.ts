@@ -115,14 +115,16 @@ test('sin la nota del dolar, el sueldo en dolares entra como pesos', () => {
   assert.deepEqual(r.sueldos[0], { periodo: '2024-08', netoArs: 1157000, netoUsd: 0, tipoCambio: null });
 });
 
-test('un reintegro no es sueldo: baja el gasto del mes', () => {
+test('un reintegro no es sueldo ni un gasto negativo: es un ingreso aparte', () => {
   const filas: Cruda[] = [
     fila({ fila: 2, mes: 'Junio', tipo: 'Reingreso', nombre: 'Naranja', costo: 63885 }),
   ];
   const r = interpretar(filas, [2024]);
   assert.equal(r.sueldos.length, 0);
-  assert.equal(r.gastos[0].montoArs, -63885);
-  assert.equal(r.gastos[0].categoria, 'Reintegros');
+  assert.equal(r.gastos.length, 0);
+  assert.deepEqual(r.ingresos, [
+    { periodo: '2024-06', concepto: 'Naranja', tipo: 'REINTEGRO', montoArs: 63885 },
+  ]);
 });
 
 test('un aguinaldo positivo dentro de Egreso se toma como ingreso, y se anota', () => {
@@ -255,4 +257,13 @@ test('el corte del bloque duplicado se lleva todas las filas de sueldo, no solo 
   assert.equal(r.sueldos.length, 1);
   assert.equal(r.sueldos[0].netoArs, 955488 + 449020);
   assert.equal(r.gastos.length, 1);
+});
+
+test('un ingreso no salarial que tampoco es reintegro queda como extra', () => {
+  const filas: Cruda[] = [
+    fila({ fila: 72, mes: 'Marzo', tipo: 'Ingreso', nombre: 'Gimnasio Flor', costo: 16000 }),
+  ];
+  const r = interpretar(filas, [2024]);
+  assert.deepEqual(r.ingresos[0].tipo, 'EXTRA');
+  assert.equal(r.sueldos.length, 0);
 });

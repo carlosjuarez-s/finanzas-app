@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { statements, salaries, monthlyCloses, gastos, prestamos } from '@/db/schema';
 import { totalDelMes, periodosConCuota, type Prestamo } from './prestamos';
 import { consolidar, tasaAhorro as calcularTasa } from './bimoneda';
+import { listar as listarIngresos, totalDelMes as totalDeIngresos, ganancias } from './ingresos';
 import { leerSupuestos } from './supuestos';
 import { dolares } from './precios';
 
@@ -10,6 +11,11 @@ export type Cierre = {
   periodo: string;
   // Crudos, cada uno en su moneda.
   ingresoArs: number;
+  /** Del ingreso, cuanto NO es sueldo. Para poder decirlo en la pantalla. */
+  extraArs: number;
+  extraUsd: number;
+  /** Y de eso, cuanto rindieron las inversiones. */
+  gananciaArs: number;
   ingresoUsd: number;
   gastoArs: number;
   gastoUsd: number;
@@ -101,8 +107,14 @@ export async function calcularCierre(usuarioId: string, periodo: string): Promis
     + sueltos.reduce((s, g) => s + Number(g.montoUsd), 0)
     + cuotas.usd;
   const percepArs = sts.reduce((s, st) => s + Number(st.percepArs), 0);
-  const ingresoArs = Number(salary?.netoArs ?? 0);
-  const ingresoUsd = Number(salary?.netoUsd ?? 0);
+  // Lo que entro y no es sueldo: ganancias de inversiones, reintegros, extras.
+  // Sin esto, un mes en que una inversion rindio mostraba una tasa de ahorro
+  // peor que la real, y el rendimiento no aparecia en ningun lado.
+  const extras = await listarIngresos(usuarioId, periodo);
+  const extra = totalDeIngresos(extras);
+
+  const ingresoArs = Number(salary?.netoArs ?? 0) + extra.ars;
+  const ingresoUsd = Number(salary?.netoUsd ?? 0) + extra.usd;
 
   // El tipo de cambio guardado del mes, si ya se cerro alguna vez.
   const [previo] = await db.select({ tipoCambio: monthlyCloses.tipoCambio })
@@ -133,6 +145,8 @@ export async function calcularCierre(usuarioId: string, periodo: string): Promis
 
   return {
     periodo, ingresoArs, ingresoUsd, gastoArs, gastoUsd,
+    extraArs: extra.ars, extraUsd: extra.usd,
+    gananciaArs: ganancias(extras).ars,
     tipoCambio: tc,
     ingresoTotalArs: ingreso.totalArs,
     gastoTotalArs: gasto.totalArs,

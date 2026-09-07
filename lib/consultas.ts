@@ -11,6 +11,7 @@ import { cargarPrestamos } from './cierre';
 import { redactarProfundo } from './pii';
 import { PERIODO } from './formato';
 import { totalesDelCierre } from './bimoneda';
+import { listar as listarIngresos, totalDelMes as totalDeIngresos, ganancias } from './ingresos';
 
 /**
  * Consultas de solo lectura sobre las finanzas.
@@ -48,6 +49,11 @@ export async function resumenDelMes(usuarioId: string, periodo: string) {
   // asi que ingreso menos gasto no daba el ahorro.
   const { ingreso, gasto } = totalesDelCierre(c);
 
+  // El cierre guarda el ingreso ya sumado. Que parte NO es sueldo hay que
+  // preguntarlo aparte, y es la diferencia entre "ganaste mas" y "una inversion
+  // rindio", que no es la misma respuesta.
+  const extras = await listarIngresos(usuarioId, periodo);
+
   return redactarProfundo({
     periodo, hayDatos: true as const,
     ingresoArs: ingreso.ars,
@@ -60,6 +66,11 @@ export async function resumenDelMes(usuarioId: string, periodo: string) {
     ahorroArs: Number(c.ahorroArs),
     tasaAhorroPct: c.tasaAhorro === null ? null : Number(c.tasaAhorro),
     percepcionesArs: Number(c.percepArs),
+    // Del ingreso, lo que no vino del recibo. Ya esta contado arriba: esto es
+    // el desglose, no algo que haya que sumar de nuevo.
+    noSalarial: totalDeIngresos(extras),
+    gananciaDeInversiones: ganancias(extras),
+    detalleNoSalarial: extras.map(i => ({ concepto: i.concepto, tipo: i.tipo, montoArs: i.montoArs, montoUsd: i.montoUsd })),
     porCategoria: c.porCategoria as Record<string, number>,
   });
 }

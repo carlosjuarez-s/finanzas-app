@@ -84,6 +84,29 @@ mira —el del mes y el anterior, porque el sueldo de un mes paga la tarjeta del
 siguiente— y nada mas: cargar el sueldo en un mes que ningun cierre lee es
 escribir un dato que despues no aparece.
 
+## No todo lo que entra es sueldo
+
+`salaries` era el unico ingreso, y eso dejaba afuera plata que entra de verdad:
+la ganancia de una inversion, lo que alguien te devuelve, un extra. Sin lugar
+donde ponerlas, esos meses mostraban una tasa de ahorro peor que la real —en la
+planilla importada eran el **13% de todo lo que entro**.
+
+`ingresos` es una tabla aparte, no una fila mas en `salaries`: un sueldo es uno
+por mes y tiene periodo unico; de esto puede haber varios. Y aparte de un
+`gasto` con monto negativo, que fue el parche de la primera version del import:
+un gasto negativo ensucia el desglose por categoria y aparece en "falta pagar".
+
+Tres tipos, y la distincion **no es cosmetica**:
+
+- `GANANCIA` — rindio una inversion. Plata nueva.
+- `REINTEGRO` — te devolvieron algo que vos pusiste. **No es plata nueva**: es
+  la misma plata volviendo. Contarla como rendimiento hace parecer que la
+  inversion rindio el doble.
+- `EXTRA` — el comodin.
+
+Los tres suman al ingreso del mes. Solo `GANANCIA` cuenta como rendimiento, y
+por eso el cierre expone `gananciaArs` aparte de `extraArs`.
+
 ## Importar una planilla hecha a mano
 
 `lib/planilla.ts` traduce la hoja "Finanzas" al modelo de la app. Las reglas que

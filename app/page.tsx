@@ -17,6 +17,7 @@ import { idUsuarioActual } from '@/lib/usuario';
 import { primerosPasos } from '@/lib/primeros-pasos';
 import PrimerosPasos from './primeros-pasos';
 import Monto from './monto';
+import Link from 'next/link';
 import SelectorMes from './selector-mes';
 import { periodosConDatos } from '@/lib/periodos';
 
@@ -137,6 +138,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           {cierre.ingresoUsd > 0 && (
             <p className="monto usd" style={{ fontSize: 12 }}>incluye {fmtUsd(cierre.ingresoUsd)}</p>
           )}
+          {/* Que parte del ingreso NO es el recibo. Sin decirlo, un mes con una
+              buena ganancia se ve como un mes de sueldo alto. */}
+          {cierre.extraArs > 0 && (
+            <p className="monto" style={{ fontSize: 12, color: 'var(--dolar)' }}>
+              {fmtArs(cierre.extraArs)} no es sueldo
+            </p>
+          )}
         </div>
         <div className="op">−</div>
         {/* Gastos y no "Tarjetas": este numero incluye los resumenes, los gastos
@@ -163,6 +171,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           {tipoCambio
             ? ` Se consolidó a $${tipoCambio.toLocaleString('es-AR')} por dólar${esMesActual ? ' (cotización de hoy)' : ', el del cierre de ese mes'}.`
             : ' Falta el tipo de cambio para poder sumarlos: cargá uno en Proyección.'}
+        </p>
+      )}
+
+      {cierre.gananciaArs > 0 && (
+        <p className="nota" style={{ borderLeftColor: 'var(--dolar)' }}>
+          De lo que entró, <strong>{fmtArs(cierre.gananciaArs)}</strong> lo rindieron tus
+          inversiones. Eso es plata nueva, no sueldo: si el mes cerró bien, cerró bien por
+          esto. <Link href={`/gastos?periodo=${periodo}`}>Ver el detalle</Link>.
         </p>
       )}
 

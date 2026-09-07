@@ -33,10 +33,16 @@ export type GastoImportado = {
   periodo: string; concepto: string; categoria: string; montoArs: number; pagado: boolean;
 };
 
+/** Plata que entro y no es sueldo: los "Reingreso" de la planilla. */
+export type IngresoImportado = {
+  periodo: string; concepto: string; tipo: 'REINTEGRO' | 'EXTRA'; montoArs: number;
+};
+
 export type Interpretacion = {
   sueldos: SueldoImportado[];
   resumenes: ResumenImportado[];
   gastos: GastoImportado[];
+  ingresos: IngresoImportado[];
   rectificaciones: Nota[];
   descartes: Nota[];
   periodos: string[];
@@ -163,7 +169,6 @@ const RUBROS: [RegExp, string][] = [
   [/^(sembrador|comision)/, 'Comisiones bancarias'],
 ];
 
-export const CATEGORIA_REINTEGRO = 'Reintegros';
 export const CATEGORIA_INVERSION = 'Inversiones';
 
 export function categoriaDe(nombre: string): string {
@@ -243,6 +248,7 @@ export function interpretar(
   const descartes: Nota[] = [];
   const resumenes: ResumenImportado[] = [];
   const gastos: GastoImportado[] = [];
+  const entradas: IngresoImportado[] = [];
 
   // El sueldo de un mes puede venir en varias filas (Salario + Salario USD +
   // Aguinaldo): se acumulan y se escribe una sola fila por periodo.
@@ -324,9 +330,14 @@ export function interpretar(
         }
         porMes.set(periodo, acc);
       } else {
-        // Reintegros y otros ingresos no salariales: gasto negativo. No es
-        // sueldo y no puede figurar como tal.
-        gastos.push({ periodo, concepto: f.nombre, categoria: CATEGORIA_REINTEGRO, montoArs: -abs, pagado: true });
+        // Reintegros y otros ingresos no salariales. Van a su propia tabla: no
+        // son sueldo, y meterlos como gasto negativo —que fue el parche de la
+        // primera version— ensuciaba el desglose por categoria.
+        entradas.push({
+          periodo, concepto: f.nombre,
+          tipo: tipo === 'reingreso' ? 'REINTEGRO' : 'EXTRA',
+          montoArs: abs,
+        });
       }
       return;
     }
@@ -347,9 +358,10 @@ export function interpretar(
     ...sueldos.map(s => s.periodo),
     ...resumenes.map(r => r.periodo),
     ...gastos.map(g => g.periodo),
+    ...entradas.map(i => i.periodo),
   ])].sort();
 
-  return { sueldos, resumenes, gastos, rectificaciones, descartes, periodos };
+  return { sueldos, resumenes, gastos, ingresos: entradas, rectificaciones, descartes, periodos };
 }
 
 // Dos decimales: la columna de la base es numeric(12,2) y guardar mas seria
@@ -443,6 +455,18 @@ export function aSql(r: Interpretacion, usuarioId: string): string {
     l.push('');
   }
 
+  if (r.ingresos.length) {
+    l.push(`-- ${r.ingresos.length} entradas que no son sueldo: reintegros de tarjeta, plata`);
+    l.push('-- que te devolvieron, extras.');
+    l.push('INSERT INTO "ingresos" ("id", "usuario_id", "file_id", "periodo", "concepto", "tipo", "monto_ars", "monto_usd", "origen") VALUES');
+    l.push(r.ingresos.map((g, i) => {
+      const id = idDeImport('ingreso', g.periodo, g.concepto, i);
+      return `  (${comilla(id)}, ${u}, ${comilla(id)}, ${comilla(g.periodo)}, ${comilla(g.concepto)}, ${comilla(g.tipo)}, ${num(g.montoArs)}, 0, 'PLANILLA')`;
+    }).join(',\n'));
+    l.push('ON CONFLICT ("usuario_id", "file_id") DO NOTHING;');
+    l.push('');
+  }
+
   l.push('COMMIT;');
   l.push('');
   l.push('-- Verificacion: ningun mes puede tener dolares sin tipo de cambio.');
@@ -459,5 +483,5 @@ export function aSql(r: Interpretacion, usuarioId: string): string {
 export const CATEGORIAS_DEL_IMPORT = [
   'Suscripciones', 'Servicios', 'Salud y deporte', 'Supermercado y comida',
   'Compras y hogar', 'Cuotas', 'Comisiones bancarias', 'Impuestos y percepciones',
-  'Alquiler', 'Transporte', 'Educacion', CATEGORIA_INVERSION, CATEGORIA_REINTEGRO, 'Otros',
+  'Alquiler', 'Transporte', 'Educacion', CATEGORIA_INVERSION, 'Otros',
 ];

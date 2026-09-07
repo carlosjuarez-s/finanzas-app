@@ -35,7 +35,9 @@ const HERRAMIENTAS: Herramienta[] = [
       'Usar cuando la pregunta es sobre un mes puntual. El sueldo puede venir partido en dos monedas: ' +
       'ingresoArs e ingresoUsd son las partes crudas, e ingresoTotalArs es el total consolidado al ' +
       'tipo de cambio de ese mes — ese es el número para responder "cuánto gané". Viene en null cuando ' +
-      'hay dólares y no se guardó el tipo de cambio: ahí no hay total, y no hay que estimarlo.',
+      'hay dólares y no se guardó el tipo de cambio: ahí no hay total, y no hay que estimarlo. ' +
+      'noSalarial y gananciaDeInversiones son el DESGLOSE de lo que ya está contado en el ingreso, ' +
+      'no plata aparte: sumarlos otra vez duplica.',
     inputSchema: {
       type: 'object',
       properties: { periodo: { type: 'string', description: 'Mes en formato YYYY-MM, por ejemplo 2026-08' } },
