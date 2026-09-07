@@ -1,10 +1,8 @@
-import { asc, desc, eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { monthlyCloses, salaries } from '@/db/schema';
-import { calcularCierre, cargarPrestamos } from '@/lib/cierre';
-import { consolidar } from '@/lib/bimoneda';
-import { listar as listarFijos, leerIndices, totalDelMes as totalDeFijos } from '@/lib/recurrentes';
-import { estimar, proximoPeriodo, type MesHistorico } from '@/lib/estimacion';
+import Link from 'next/link';
+import { proximoPeriodo } from '@/lib/estimacion';
+import { estimacionDeMes } from '@/lib/estimar-mes';
+import { periodosConDatos, conMesActual } from '@/lib/periodos';
+import SelectorMes from '../selector-mes';
 import { fmtArs, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import { idUsuarioActual } from '@/lib/usuario';
@@ -26,66 +24,36 @@ const COLOR_FIJO = '#6B4E9E';
 const COLOR_RECURRENTE = '#2D5FA8';
 const COLOR_VARIABLE = '#1E7A4F';
 
-export default async function Estimacion() {
+export default async function Estimacion({ searchParams }: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
   const usuarioId = await idUsuarioActual();
+  const { periodo: qp } = await searchParams;
   const hoy = new Date().toISOString().slice(0, 7);
 
-  let cierres, prestamos, ultimoSueldo;
+  let periodos: string[];
+  let datos: Awaited<ReturnType<typeof estimacionDeMes>>;
   try {
-    [cierres, prestamos, ultimoSueldo] = await Promise.all([
-      db.select().from(monthlyCloses).where(eq(monthlyCloses.usuarioId, usuarioId))
-        .orderBy(asc(monthlyCloses.periodo)),
-      cargarPrestamos(usuarioId),
-      db.query.salaries.findFirst({
-        where: eq(salaries.usuarioId, usuarioId), orderBy: desc(salaries.periodo),
-      }),
-    ]);
+    // Se puede estimar cualquier mes, no solo el que viene: mirar como se
+    // habria estimado un mes que ya paso es la unica forma de saber si la
+    // estimacion sirve.
+    const conDatos = await periodosConDatos(usuarioId);
+    const ultimo = conDatos[0];
+    periodos = conMesActual(
+      [...new Set([...conDatos, proximoPeriodo(ultimo, hoy)])].sort().reverse(),
+      hoy,
+    );
+    datos = await estimacionDeMes(usuarioId, qp && periodos.includes(qp) ? qp : periodos[0]);
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;
     return <FaltaMigracion tabla={tabla} seccion="Estimación" />;
   }
 
-  const periodo = proximoPeriodo(cierres[cierres.length - 1]?.periodo, hoy);
-
-  // El tipo de cambio del mes que viene no existe: se usa el del cierre más
-  // reciente que tenga uno. Es un supuesto, y por eso se dice cuál se usó.
-  const tcReferencia = [...cierres].reverse()
-    .map(c => (c.tipoCambio === null ? null : Number(c.tipoCambio)))
-    .find(tc => tc !== null && tc > 0) ?? null;
-
-  const historico: MesHistorico[] = cierres.map(c => ({
-    periodo: c.periodo,
-    porCategoria: c.porCategoria as Record<string, number>,
-    gastoTotalArs: consolidar(
-      { ars: Number(c.gastoArs), usd: Number(c.gastoUsd) },
-      c.tipoCambio === null ? null : Number(c.tipoCambio),
-    ).totalArs,
-  }));
-
-  // El último sueldo conocido, sin proyectar aumentos: inventar una paritaria
-  // sería agregarle un error propio a una estimación que ya tiene el suyo.
-  const ingresoRef = ultimoSueldo
-    ? consolidar(
-        { ars: Number(ultimoSueldo.netoArs), usd: Number(ultimoSueldo.netoUsd) },
-        tcReferencia,
-      ).totalArs
-    : null;
-
-  // Lo declarado le gana a lo inferido: los fijos entran con su monto y su
-  // aumento, y se restan del historico para no contarse dos veces.
-  const [fijos, indices] = await Promise.all([listarFijos(usuarioId), leerIndices(usuarioId)]);
-  const delMes = totalDeFijos(fijos, periodo, indices);
-  const fijosArs = consolidar(delMes.monto, tcReferencia).totalArs;
-
-  const e = estimar(periodo, historico, prestamos, ingresoRef, {
-    tipoCambio: tcReferencia,
-    fijos: {
-      porCategoria: delMes.porCategoria,
-      totalArs: fijosArs ?? delMes.monto.ars,
-      faltaIndice: delMes.faltaIndice,
-    },
-  });
+  const e = datos.estimacion;
+  const periodo = e.periodo;
+  const tcReferencia = datos.tipoCambio;
+  const ingresoRef = e.ingresoReferenciaArs;
 
   // El orden es por cuanto se le puede creer, de mas a menos: cuota firmada,
   // gasto fijo declarado, lo que aparenta repetirse, y lo que se adivina.
@@ -101,12 +69,23 @@ export default async function Estimacion() {
       <Nav />
       <p className="eyebrow">Estimación</p>
       <h1>{fmtPeriodo(periodo)}</h1>
+      <SelectorMes periodos={periodos} actual={periodo} hoy={hoy} />
 
       {/* Lo primero que hay que saber es que esto no es un dato. */}
       <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
         Esto <strong>no</strong> es un mes cerrado: es una estimación y no entra al histórico.
         Cuando el mes pase y cargues los comprobantes, el número real lo reemplaza.
       </p>
+
+      {e.periodoDelIngreso && (
+        <p className="nota">
+          El ingreso sale del sueldo de <strong>{fmtPeriodo(e.periodoDelIngreso)}</strong>, sin
+          proyectar aumentos.{' '}
+          <Link href={`/gastos?periodo=${e.periodoDelIngreso}`}>Ajustalo</Link> y esta pantalla
+          cambia sola.
+          {datos.tipoCambioDe && ` Se consolidó con el tipo de cambio del cierre de ${fmtPeriodo(datos.tipoCambioDe)}.`}
+        </p>
+      )}
 
       <div className="ledger">
         <div className="celda">

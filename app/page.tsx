@@ -19,7 +19,9 @@ import PrimerosPasos from './primeros-pasos';
 import Monto from './monto';
 import Link from 'next/link';
 import SelectorMes from './selector-mes';
-import { periodosConDatos } from '@/lib/periodos';
+import { periodosConDatos, conMesActual } from '@/lib/periodos';
+import { estimacionDeMes } from '@/lib/estimar-mes';
+import Estimado from './estimado';
 
 // Paleta validada para tres categorias sobre el papel de la app (contraste,
 // separacion bajo daltonismo y piso de croma). No agregar un cuarto color sin
@@ -34,8 +36,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const usuarioId = await idUsuarioActual();
   const { periodo: qp } = await searchParams;
   // Todos los meses con algo cargado, no solo los que tienen resumen: un mes
-  // pagado sin tarjeta existe y antes no se podia abrir.
-  const periodos = await periodosConDatos(usuarioId);
+  // pagado sin tarjeta existe y antes no se podia abrir. Y el mes en curso
+  // siempre, tenga datos o no: es el que uno mas quiere abrir.
+  const hoy = new Date().toISOString().slice(0, 7);
+  const conDatos = await periodosConDatos(usuarioId);
+  const periodos = conMesActual(conDatos, hoy);
   const periodo = qp && periodos.includes(qp) ? qp : periodos[0];
   if (!periodo) {
     return (
@@ -71,6 +76,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const ahorro = cierre.ahorroArs;
 
   const cats = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
+
+  // Un cierre son datos reales de un mes que ya paso. El mes en curso todavia
+  // no los tiene todos, y mostrar lo poco cargado como si fuera el mes entero
+  // hacia ver un mes de ahorro altisimo donde solo faltaba cargar la tarjeta.
+  //
+  // Para el mes en curso y los que vienen, se calcula ademas la estimacion. NO
+  // se guarda: se muestra aparte, y el cierre de arriba sigue siendo lo real.
+  const aunNoCerro = periodo >= hoy;
+  const estimado = aunNoCerro ? await estimacionDeMes(usuarioId, periodo) : null;
+  const hayDatosDelMes = sts.length > 0 || cierre.ingresoArs > 0 || cierre.ingresoUsd > 0 || gastoArs > 0;
 
   // Las tres partes en que se divide el sueldo. Se agrupa en tres a proposito:
   // es lo que la paleta tiene validado y lo que una barra de este alto puede
@@ -126,10 +141,18 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <Nav />
       <p className="eyebrow">Cierre financiero</p>
       <h1>{fmtPeriodo(periodo)}</h1>
-      <SelectorMes periodos={periodos} actual={periodo} />
+      <SelectorMes periodos={periodos} actual={periodo} hoy={hoy} />
       <SyncButton />
 
       <PrimerosPasos arranque={await primerosPasos(usuarioId)} />
+
+      {aunNoCerro && (
+        <p className="nota">
+          {hayDatosDelMes
+            ? 'Este mes todavía no cerró: los números de acá arriba son lo que ya cargaste, no el mes completo. Más abajo está la estimación.'
+            : 'Este mes todavía no tiene nada cargado. Más abajo está lo que se estima que va a ser.'}
+        </p>
+      )}
 
       <div className="ledger">
         <div className="celda">
@@ -180,6 +203,15 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           inversiones. Eso es plata nueva, no sueldo: si el mes cerró bien, cerró bien por
           esto. <Link href={`/gastos?periodo=${periodo}`}>Ver el detalle</Link>.
         </p>
+      )}
+
+      {estimado && (
+        <Estimado
+          e={estimado.estimacion}
+          periodo={periodo}
+          cargadoArs={gastoTotal}
+          hayDatos={hayDatosDelMes}
+        />
       )}
 
       {neto !== null && neto > 0 && (

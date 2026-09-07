@@ -33,3 +33,16 @@ export function vecino(periodos: string[], actual: string, hacia: 'anterior' | '
   const j = hacia === 'anterior' ? i + 1 : i - 1;
   return periodos[j] ?? null;
 }
+
+/**
+ * La lista con la que se navega, que no es la misma que la de meses con datos.
+ *
+ * El mes en curso **siempre** entra, aunque no tenga nada cargado: es el mes
+ * que uno mas quiere abrir, y es justo el que todavia no tiene datos. Sin
+ * esto, "ir al mes actual" fallaba en el unico momento en que hace falta.
+ */
+export function conMesActual(periodos: string[], hoy: string): string[] {
+  return periodos.includes(hoy)
+    ? periodos
+    : [...periodos, hoy].sort().reverse();
+}

@@ -52,6 +52,9 @@ export type Estimacion = {
   lineas: LineaEstimada[];
   /** Ingreso de referencia: el ultimo conocido, sin proyectar aumentos. */
   ingresoReferenciaArs: number | null;
+  /** De que mes salio ese sueldo. Sin decirlo, el numero no se puede auditar
+   *  ni corregir: hay que saber cual ir a tocar. */
+  periodoDelIngreso: string | null;
   ahorroEstimadoArs: number | null;
   /** Lo que hace falta saber para leer el numero sin creerle de mas. */
   advertencias: string[];
@@ -78,6 +81,8 @@ export function estimar(
   opciones: {
     mesesAMirar?: number;
     tipoCambio?: number | null;
+    /** El mes del sueldo que se uso como referencia. */
+    periodoDelIngreso?: string | null;
     /** Los gastos fijos declarados, ya resueltos para el mes que se estima. */
     fijos?: { porCategoria: Record<string, number>; totalArs: number; faltaIndice: string[] };
   } = {},
@@ -191,6 +196,7 @@ export function estimar(
     comprometidoArs, fijoArs, recurrenteArs, variableArs, totalArs,
     lineas,
     ingresoReferenciaArs,
+    periodoDelIngreso: opciones.periodoDelIngreso ?? null,
     ahorroEstimadoArs: ingresoReferenciaArs === null ? null : ingresoReferenciaArs - totalArs,
     advertencias,
   };

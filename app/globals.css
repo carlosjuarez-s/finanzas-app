@@ -557,6 +557,15 @@ section > h2 {
 }
 .flecha-mes:hover { border-color: var(--tinta-suave); }
 .flecha-mes[data-inactiva] { color: var(--linea); background: transparent; cursor: default; }
+.boton-mes {
+  display: inline-flex; align-items: center;
+  height: 34px; padding: 0 12px;
+  border: 1px solid var(--linea); border-radius: 6px;
+  background: var(--papel-alto); color: var(--peso);
+  font-family: var(--font-data); font-size: 11.5px;
+  text-transform: uppercase; letter-spacing: .07em; text-decoration: none;
+}
+.boton-mes:hover { border-color: var(--tinta-suave); }
 
 /* Una barra que lleva a algun lado se comporta como link: cambia el cursor,
    se subraya la etiqueta al pasar y tiene foco visible. Sin eso parece
@@ -656,3 +665,14 @@ section > h2 {
      porque "3 cosas sin pagar" es justamente lo que uno quiere ver sin abrir. */
   .secciones .ant-tabs-tab .chip:not([data-corto]) { display: none; }
 }
+
+/* El bloque estimado. Se separa del cierre con un fondo propio y un filete
+   punteado: lo estimado y lo real no pueden leerse como lo mismo. */
+.estimado {
+  border: 1px dashed var(--linea);
+  border-radius: 8px;
+  padding: 4px 16px 18px;
+  margin-top: 28px;
+  background: var(--papel-alto);
+}
+.estimado > h2 { border-bottom-style: dashed; }

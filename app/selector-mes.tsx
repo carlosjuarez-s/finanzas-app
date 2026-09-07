@@ -18,10 +18,13 @@ import { vecino } from '@/lib/periodos';
  * envolver el componente en un Suspense y hace fallar el build de cualquier
  * pagina que no sea dinamica.
  */
-export default function SelectorMes({ periodos, actual, conservar }: {
+export default function SelectorMes({ periodos, actual, conservar, hoy }: {
   periodos: string[];
   actual: string;
   conservar?: Record<string, string | undefined>;
+  /** El mes en curso, calculado en el servidor. Si se calculara acá, dos
+   *  teléfonos en zonas distintas mostrarían meses distintos. */
+  hoy?: string;
 }) {
   const router = useRouter();
   const path = usePathname();
@@ -48,8 +51,15 @@ export default function SelectorMes({ periodos, actual, conservar }: {
         optionFilterProp="label"
       />
       <Flecha href={siguiente && irA(siguiente)} hacia="siguiente" />
+
+      {/* Volver al mes en curso desde treinta meses atras eran treinta toques
+          en la flecha, o buscarlo en la lista. */}
+      {hoy && hoy !== actual && (
+        <Link className="boton-mes" href={irA(hoy)}>Mes actual</Link>
+      )}
+
       <span className="resultado" style={{ fontSize: 12 }}>
-        {periodos.length} {periodos.length === 1 ? 'mes' : 'meses'} con datos
+        {periodos.length} {periodos.length === 1 ? 'mes' : 'meses'}
       </span>
     </div>
   );

@@ -84,6 +84,38 @@ mira —el del mes y el anterior, porque el sueldo de un mes paga la tarjeta del
 siguiente— y nada mas: cargar el sueldo en un mes que ningun cierre lee es
 escribir un dato que despues no aparece.
 
+## El mes que no cerro se estima, y se dice que es una estimacion
+
+Un cierre son datos reales de un mes que ya paso. El mes en curso no los tiene
+todos —recien los vas cargando— y la pantalla mostraba lo poco que hubiera como
+si fuera el mes entero: un mes con dos gastos cargados se veia como un mes de
+ahorro altisimo.
+
+Para el mes en curso y los que vienen, el cierre calcula ademas la estimacion
+y la muestra **aparte**, con borde punteado, fondo propio y un chip que dice
+"no es un cierre". Lo estimado y lo real no pueden leerse como lo mismo.
+
+**No se guarda nunca.** Sigue valiendo "estimar no es cerrar": si entrara a
+`monthly_closes`, contaminaria los promedios que alimentan la proxima
+estimacion y el error se realimentaria solo.
+
+`lib/estimar-mes.ts` es el unico camino, y lo usan las dos pantallas. Existe
+por la misma razon que `calcularCierre`: si cada una armara su consulta, tarde
+o temprano mostrarian numeros distintos del mismo mes.
+
+Dos detalles que sostienen el numero:
+
+- **Solo el historico anterior al mes que se estima.** Incluir el propio mes
+  seria estimarlo con si mismo: daria bien siempre y no diria nada.
+- **El ingreso es el ultimo sueldo cargado, sin proyectar aumentos**, y la
+  pantalla dice **de que mes salio** con un link para corregirlo. Sin decirlo,
+  el numero no se puede auditar: hay que saber cual ir a tocar.
+
+**El mes en curso siempre es navegable**, tenga datos o no (`conMesActual`): es
+el mes que uno mas quiere abrir y es justo el que todavia no tiene nada. Y hay
+un boton "Mes actual" en el selector, porque volver desde treinta meses atras
+eran treinta toques en la flecha.
+
 ## Un gasto fijo declarado le gana a uno inferido
 
 La estimacion adivinaba los gastos fijos: llamaba "recurrente" a la categoria
