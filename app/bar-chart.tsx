@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { fmtArs, fmtUsd, fmtCorto, fmtPct } from '@/lib/formato';
 
 // Barras horizontales, no verticales: las etiquetas son nombres de activos y
@@ -12,7 +13,13 @@ import { fmtArs, fmtUsd, fmtCorto, fmtPct } from '@/lib/formato';
 
 const FORMATOS = { corto: fmtCorto, ars: fmtArs, usd: fmtUsd, pct: fmtPct } as const;
 
-export type Barra = { etiqueta: string; valor: number; nota?: string };
+export type Barra = {
+  etiqueta: string;
+  valor: number;
+  nota?: string;
+  /** Si la barra lleva a algun lado, la fila entera es el link. */
+  href?: string;
+};
 
 type Props = {
   datos: Barra[];
@@ -43,13 +50,12 @@ export default function BarChart({ datos, formato = 'corto', divergente = false,
             ? (negativo ? 'var(--alerta)' : 'var(--dolar)')
             : 'var(--peso)';
 
-          return (
-            <div
-              key={d.etiqueta}
-              className="barra-fila"
-              onMouseEnter={() => setActivo(i)}
-              onMouseLeave={() => setActivo(null)}
-            >
+          // Con href la fila entera es el link, no solo la etiqueta: el
+          // objetivo tactil pasa a ser toda la barra. Se escriben las dos ramas
+          // en vez de un componente dinamico: `<Fila>` con href opcional no
+          // tipa, porque Link exige href y div no lo acepta.
+          const dentro = (
+            <>
               <span className="barra-etiqueta">{d.etiqueta}</span>
 
               <span className="barra-pista">
@@ -70,6 +76,21 @@ export default function BarChart({ datos, formato = 'corto', divergente = false,
               <span className="barra-valor monto" style={{ color: divergente ? color : undefined }}>
                 {fmt(d.valor)}
               </span>
+            </>
+          );
+
+          const manos = {
+            onMouseEnter: () => setActivo(i),
+            onMouseLeave: () => setActivo(null),
+          };
+
+          return d.href ? (
+            <Link key={d.etiqueta} href={d.href} className="barra-fila barra-link" {...manos}>
+              {dentro}
+            </Link>
+          ) : (
+            <div key={d.etiqueta} className="barra-fila" {...manos}>
+              {dentro}
             </div>
           );
         })}

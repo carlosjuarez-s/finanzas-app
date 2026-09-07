@@ -19,6 +19,9 @@ import Categorias from './categorias';
 import SueldoManual from './sueldo';
 import Editor, { type Item } from './editor';
 import { leerCategorias } from '@/lib/categorias';
+import { periodosConDatos } from '@/lib/periodos';
+import SelectorMes from '../selector-mes';
+import FiltroCategoria from './filtro-categoria';
 import { idUsuarioActual } from '@/lib/usuario';
 
 export const dynamic = 'force-dynamic';
@@ -29,9 +32,11 @@ export const dynamic = 'force-dynamic';
 const enPesosItem = (i: Item, tc: number | null) =>
   consolidar({ ars: i.monto, usd: i.montoUsd ?? 0 }, tc).totalArs ?? i.monto;
 
-export default async function Gastos({ searchParams }: { searchParams: Promise<{ periodo?: string }> }) {
+export default async function Gastos({ searchParams }: {
+  searchParams: Promise<{ periodo?: string; categoria?: string }>;
+}) {
   const usuarioId = await idUsuarioActual();
-  const { periodo: qp } = await searchParams;
+  const { periodo: qp, categoria: filtro } = await searchParams;
   // La fecha la fija el servidor: si la calculara el cliente, dos telefonos en
   // zonas distintas mostrarian "hace 7 meses" y "hace 8" para el mismo prestamo.
   const hoyISO = new Date().toISOString().slice(0, 10);
@@ -46,6 +51,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
   let pagos: EstadoDePagos = { pendientes: [], pagados: 0, faltaPagarArs: 0 };
   let tc: number | null = null;
   let anterior = '';
+  let periodos: string[] = [];
 
   async function cargarStatements(p: string) {
     return db.query.statements.findMany({
@@ -79,6 +85,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
 
     // El mes mas reciente con algo cargado, sea tarjeta o gasto suelto.
     periodo = qp ?? [ultimoSt?.periodo, ultimoGasto[0]?.periodo].filter(Boolean).sort().pop();
+    periodos = await periodosConDatos(usuarioId);
     if (!periodo) {
       // Sin gastos todavia se puede estar pagando un credito, y hay que poder
       // cargarlo: si no, la unica forma de llegar a esta seccion seria subir
@@ -173,15 +180,35 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
     .sort((a, b) => b[1] - a[1])
     .map(([etiqueta, valor]) => ({ etiqueta, valor }));
 
+  // Llegar desde el cierre tocando una categoria: se muestra solo esa. El
+  // grafico y los totales del mes NO se filtran —son del mes, no del filtro—
+  // porque si tambien cambiaran, uno perderia la referencia contra la que
+  // estaba comparando.
+  const coincide = (i: Item) => !filtro || i.categoria === filtro;
+  const visiblesGastos = itemsGastos.filter(coincide);
+  const visiblesConsumos = itemsConsumos.filter(coincide);
+
   return (
     <main>
       <Nav />
       <p className="eyebrow">Gastos · {fmtPeriodo(periodo)}</p>
       <h1>Revisar y corregir</h1>
+      {periodos.length > 1 && (
+        <SelectorMes periodos={periodos} actual={periodo} conservar={{ categoria: filtro }} />
+      )}
       <p className="resultado">
         Todo esto lo interpretó un modelo a partir de tus documentos. Si algo quedó mal,
         corregilo acá: el cierre del mes se recalcula solo.
       </p>
+
+      {filtro && (
+        <FiltroCategoria
+          categoria={filtro}
+          periodo={periodo}
+          cuantos={visiblesGastos.length + visiblesConsumos.length}
+          esCuotas={filtro === 'Cuotas' && (cuotas ?? 0) > 0}
+        />
+      )}
 
       {porCategoria.length > 1 && (
         <section>
@@ -210,11 +237,15 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
       <section>
         <h2>
           Servicios, alquiler y otros
-          <span className="chip">{fmtArs(itemsGastos.reduce((s, i) => s + i.monto, 0))}</span>
+          <span className="chip">{fmtArs(visiblesGastos.reduce((s, i) => s + i.monto, 0))}</span>
         </h2>
-        {itemsGastos.length
-          ? itemsGastos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)
-          : <p className="resultado">Todavía no hay gastos fuera de la tarjeta en este mes.</p>}
+        {visiblesGastos.length
+          ? visiblesGastos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)
+          : <p className="resultado">
+              {filtro
+                ? `Ningún gasto suelto de este mes es de «${filtro}».`
+                : 'Todavía no hay gastos fuera de la tarjeta en este mes.'}
+            </p>}
       </section>
 
       <SueldoManual
@@ -229,14 +260,14 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
         } : null}
       />
 
-      {itemsConsumos.length > 0 && (
+      {visiblesConsumos.length > 0 && (
         <section>
           <h2>Consumos de tarjeta</h2>
           <p className="resultado">
             Corregir una línea reacomoda el desglose por categoría. El total del mes sigue
             saliendo del «TOTAL A PAGAR» del resumen, que es el número que efectivamente pagás.
           </p>
-          {itemsConsumos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)}
+          {visiblesConsumos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)}
         </section>
       )}
     </main>

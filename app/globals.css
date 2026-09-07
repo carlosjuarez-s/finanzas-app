@@ -544,3 +544,36 @@ section > h2 {
   margin-right: 2px;
   vertical-align: 1px;
 }
+
+/* Cambiar de mes. La flecha es un objetivo tactil de 34px aunque el signo sea
+   chico: en el telefono se toca con el pulgar. */
+.selector-mes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 18px; }
+.flecha-mes {
+  display: grid; place-items: center;
+  width: 34px; height: 34px;
+  border: 1px solid var(--linea); border-radius: 6px;
+  background: var(--papel-alto); color: var(--tinta);
+  font-size: 18px; line-height: 1; text-decoration: none;
+}
+.flecha-mes:hover { border-color: var(--tinta-suave); }
+.flecha-mes[data-inactiva] { color: var(--linea); background: transparent; cursor: default; }
+
+/* Una barra que lleva a algun lado se comporta como link: cambia el cursor,
+   se subraya la etiqueta al pasar y tiene foco visible. Sin eso parece
+   decorativa y nadie la toca. */
+.barra-link { text-decoration: none; color: inherit; cursor: pointer; }
+.barra-link:hover .barra-etiqueta { text-decoration: underline; }
+.barra-link:focus-visible { outline: 2px solid var(--foco); outline-offset: 3px; border-radius: 3px; }
+
+/* Aviso de filtro activo. Va arriba de todo y con el color de acento: es un
+   estado de la pantalla, no un dato mas. */
+.filtro {
+  display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+  border-left: 3px solid var(--peso);
+  background: var(--papel-alto);
+  border-radius: 0 6px 6px 0;
+  padding: 10px 14px; margin: 14px 0;
+  font-size: 14px;
+}
+.filtro strong { font-weight: 600; }
+.filtro > a { color: var(--peso); }

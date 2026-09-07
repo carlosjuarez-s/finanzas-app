@@ -6,7 +6,7 @@ import { consolidar } from '@/lib/bimoneda';
 import { totalDelMes } from '@/lib/prestamos';
 import { preciosDePortafolio } from '@/lib/precios';
 import { clasesDeActivos, ratiosVigentes } from '@/lib/sync-portafolio';
-import { fmtArs, fmtUsd } from '@/lib/formato';
+import { fmtArs, fmtUsd, fmtPeriodo } from '@/lib/formato';
 import { ALICUOTA_PERCEPCION, pesoSobreGasto } from '@/lib/impuestos';
 import Nav from './nav';
 import SyncButton from './sync-button';
@@ -17,6 +17,8 @@ import { idUsuarioActual } from '@/lib/usuario';
 import { primerosPasos } from '@/lib/primeros-pasos';
 import PrimerosPasos from './primeros-pasos';
 import Monto from './monto';
+import SelectorMes from './selector-mes';
+import { periodosConDatos } from '@/lib/periodos';
 
 // Paleta validada para tres categorias sobre el papel de la app (contraste,
 // separacion bajo daltonismo y piso de croma). No agregar un cuarto color sin
@@ -30,11 +32,10 @@ export const dynamic = 'force-dynamic';
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ periodo?: string }> }) {
   const usuarioId = await idUsuarioActual();
   const { periodo: qp } = await searchParams;
-  const ultimo = await db.query.statements.findFirst({
-    where: eq(statements.usuarioId, usuarioId),
-    orderBy: desc(statements.periodo), columns: { periodo: true },
-  });
-  const periodo = qp ?? ultimo?.periodo;
+  // Todos los meses con algo cargado, no solo los que tienen resumen: un mes
+  // pagado sin tarjeta existe y antes no se podia abrir.
+  const periodos = await periodosConDatos(usuarioId);
+  const periodo = qp && periodos.includes(qp) ? qp : periodos[0];
   if (!periodo) {
     return (
       <main>
@@ -123,7 +124,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <main>
       <Nav />
       <p className="eyebrow">Cierre financiero</p>
-      <h1>{periodo}</h1>
+      <h1>{fmtPeriodo(periodo)}</h1>
+      <SelectorMes periodos={periodos} actual={periodo} />
       <SyncButton />
 
       <PrimerosPasos arranque={await primerosPasos(usuarioId)} />
@@ -182,10 +184,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <h2>Gastos por categoría</h2>
         {/* Barras y no torta: acá la pregunta es cual categoria es mas grande
             que cual, y comparar largos es lo que el ojo hace bien. */}
+        {/* Cada barra lleva al detalle: ver que una categoria se disparo y no
+            poder abrirla obligaba a ir a Gastos y buscarla a mano. */}
         <BarChart
-          datos={cats.map(([cat, monto]) => ({ etiqueta: cat, valor: monto }))}
+          datos={cats.map(([cat, monto]) => ({
+            etiqueta: cat, valor: monto,
+            href: `/gastos?periodo=${periodo}&categoria=${encodeURIComponent(cat)}`,
+          }))}
           formato="ars"
         />
+        <p className="nota">Tocá una categoría para ver y corregir lo que la compone.</p>
       </section>
 
       {subs.length > 0 && (
