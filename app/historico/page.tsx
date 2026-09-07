@@ -10,6 +10,7 @@ import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import { idUsuarioActual } from '@/lib/usuario';
 import Monto from '../monto';
+import Recalcular from '../recalcular';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,13 @@ export default async function Historico() {
         <p className="eyebrow">Historico</p>
         <h1>Sin meses cerrados</h1>
         <p>Cargá al menos un resumen desde el cierre para empezar a ver la evolución.</p>
+        {/* Si los datos entraron por afuera —un import pegado en el SQL
+            editor— estan cargados pero ningun cierre se calculo todavia. */}
+        <p className="nota">
+          ¿Importaste datos y esta pantalla sigue vacía? Los cierres se calculan, no se
+          importan: tocá el botón.
+        </p>
+        <Recalcular />
       </main>
     );
   }
@@ -137,6 +145,8 @@ export default async function Historico() {
           o puede ser que falte cargar el recibo de ese mes.
         </p>
       </section>
+
+      <Recalcular />
 
       <section>
         <h2>Mes a mes</h2>

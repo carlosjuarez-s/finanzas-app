@@ -84,6 +84,36 @@ mira —el del mes y el anterior, porque el sueldo de un mes paga la tarjeta del
 siguiente— y nada mas: cargar el sueldo en un mes que ningun cierre lee es
 escribir un dato que despues no aparece.
 
+## Importar una planilla hecha a mano
+
+`lib/planilla.ts` traduce la hoja "Finanzas" al modelo de la app. Las reglas que
+lo hacen confiable, y que valen para cualquier import futuro:
+
+- **No inventa un numero.** Lo que corrige queda en `rectificaciones`, lo que no
+  puede traducir queda en `descartes` con el motivo. Las dos listas se muestran.
+- **La heuristica se verifica antes de usarse.** El año no esta en la planilla y
+  se infiere ("un Enero detras de un Diciembre es un año nuevo"), pero
+  `verificar()` lo contrasta contra los vencimientos que si traen año y contra
+  el mes en curso. Si alguna ancla no cierra, el import **se detiene**: escribir
+  tres años de datos corridos es peor que no escribir nada.
+- **Lo ambiguo se pregunta, no se elige.** Un "Ingreso" con monto negativo puede
+  ser plata que entro o que salio, y la diferencia es del doble del monto: se
+  descarta con el motivo.
+- **Un mes cargado dos veces se detecta por el sueldo.** Una persona cobra un
+  sueldo por mes: dos filas "Salario" en un periodo son un bloque duplicado.
+  Sumarlos da un mes con el doble de todo que corre el promedio de los demas.
+- **El SQL es idempotente.** Cada fila lleva un `file_id` derivado del contenido
+  y va con `ON CONFLICT DO NOTHING` contra los unicos que ya existen. Correrlo
+  dos veces no duplica una fila, y lo que ya estaba gana.
+
+Se verifica de verdad: `initdb` local, las diez migraciones, el import, y de
+nuevo el import para probar que no duplica. La suma reconcilia contra el total
+de la planilla al peso.
+
+**Los cierres no se importan, se calculan.** Cuando los datos entran por afuera
+de la app no hay nada que dispare el recalculo: por eso existe
+`POST /api/recalcular`, y el boton en Historico.
+
 ## Es una app argentina
 
 No es una app de finanzas que ademas soporta Argentina: **es argentina**, y
