@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aporteNecesario, cuantoTarda, techo, reparto } from './plan';
+import { aporteNecesario, cuantoTarda, techo, reparto, mesAMes } from './plan';
 import { proyectar, SUPUESTOS_DEFAULT } from './proyeccion';
 
 // La prueba que mas vale: lo que este modulo despeja tiene que dar exactamente
@@ -109,4 +109,73 @@ test('el reparto separa lo que pusiste de lo que puso el interes', () => {
   assert.ok(Math.abs(r.pctRendimiento - 100 / 3) < 1e-9);
   // Con retorno negativo el "rendimiento" es negativo, y hay que poder decirlo.
   assert.equal(reparto(80, 100).rendimiento, -20);
+});
+
+// ---------------------------------------------------------------- mes a mes
+
+test('cada fila cierra: lo que pusiste mas lo que puso el interes es el saldo', () => {
+  const puntos = proyectar({
+    aporteMensualUsd: 300, meses: 60, supuestos: SUPUESTOS_DEFAULT,
+    saldoInicialUsd: 2000, desde: '2026-10',
+  });
+  for (const e of ['PESOS', 'DOLARES', 'INDICE'] as const) {
+    for (const f of mesAMes(puntos, e)) {
+      assert.ok(
+        Math.abs(f.aportado + f.rendimiento - f.saldo) < 1e-9,
+        `${e} ${f.periodo}: ${f.aportado} + ${f.rendimiento} != ${f.saldo}`,
+      );
+    }
+  }
+});
+
+test('las columnas del mes suman el salto del saldo', () => {
+  const puntos = proyectar({
+    aporteMensualUsd: 500, meses: 24, supuestos: SUPUESTOS_DEFAULT, desde: '2026-10',
+  });
+  const filas = mesAMes(puntos, 'INDICE');
+  for (let i = 1; i < filas.length; i++) {
+    const salto = filas[i].saldo - filas[i - 1].saldo;
+    assert.ok(
+      Math.abs(salto - (filas[i].aporte + filas[i].rindio)) < 1e-9,
+      `${filas[i].periodo}: el salto ${salto} no es aporte + rindio`,
+    );
+  }
+});
+
+test('arranca en el mes elegido y el mes 0 no tiene aporte ni rendimiento', () => {
+  const puntos = proyectar({
+    aporteMensualUsd: 300, meses: 3, supuestos: SUPUESTOS_DEFAULT,
+    saldoInicialUsd: 1000, desde: '2026-10',
+  });
+  const filas = mesAMes(puntos, 'INDICE');
+  assert.equal(filas.length, 4);
+  assert.deepEqual(filas.map(f => f.periodo), ['2026-10', '2026-11', '2026-12', '2027-01']);
+  // El mes 0 es el punto de partida: el saldo que ya tenias no es un aporte de
+  // ese mes ni lo puso el interes.
+  assert.equal(filas[0].aporte, 0);
+  assert.equal(filas[0].rindio, 0);
+  assert.equal(filas[0].rendimiento, 0);
+  assert.equal(filas[0].saldo, 1000);
+  // Y el aporte de cada mes siguiente es el aporte, ni mas ni menos.
+  assert.ok(filas.slice(1).every(f => Math.abs(f.aporte - 300) < 1e-9));
+});
+
+test('el interes del mes crece solo, sin aportar mas', () => {
+  const puntos = proyectar({
+    aporteMensualUsd: 300, meses: 36, supuestos: SUPUESTOS_DEFAULT, desde: '2026-10',
+  });
+  const filas = mesAMes(puntos, 'INDICE').slice(1);
+  // Es la razon de ser de la tabla: con el mismo aporte todos los meses, lo que
+  // pone el interes sube mes a mes. Si esto fuera plano seria interes simple.
+  for (let i = 2; i < filas.length; i++) {
+    assert.ok(filas[i].rindio > filas[i - 1].rindio, `${filas[i].periodo} no crecio`);
+  }
+});
+
+test('con retorno real negativo lo que "rinde" cada mes es negativo', () => {
+  const puntos = proyectar({
+    aporteMensualUsd: 300, meses: 12, supuestos: SUPUESTOS_DEFAULT, desde: '2026-10',
+  });
+  const filas = mesAMes(puntos, 'PESOS').slice(2);
+  assert.ok(filas.every(f => f.rindio < 0), 'los pesos quietos no pueden rendir positivo');
 });

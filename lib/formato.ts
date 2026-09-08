@@ -1,7 +1,11 @@
 // Formato argentino en un solo lugar: las paginas mostraban el mismo monto con
 // distinto separador segun quien lo escribiera.
 const num = (n: number, dec = 2) =>
-  n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  // Nada se muestra como "-0". Un rendimiento de -0,0000001 redondeado a entero
+  // es cero, pero toLocaleString le deja el signo menos puesto, y un menos
+  // adelante de un cero se lee como perdida donde no hubo ninguna.
+  (Math.abs(n) < 0.5 / 10 ** dec ? 0 : n)
+    .toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
 export const fmtArs = (n: number) => '$ ' + num(n);
 export const fmtUsd = (n: number) => 'U$S ' + num(n);
@@ -19,6 +23,11 @@ export const fmtNumEntero = (n: number) => num(n, 0);
 // Un decimal y sin unidad: "4,3 años". toFixed(1) escribe "4.3", y en es-AR el
 // punto es el separador de miles, no el decimal.
 export const fmtNum1 = (n: number) => num(n, 1);
+
+// Con signo explicito cuando es positivo, para columnas de variacion. El signo
+// se decide sobre el numero YA redondeado: si no, un +0,4 se muestra "+0" y un
+// -0,4 se muestra "0", dos formas distintas del mismo cero.
+export const fmtNumConSigno = (n: number) => (Math.round(n) > 0 ? '+' : '') + fmtNumEntero(n);
 
 // Para ejes: los miles llenan el eje y no aportan nada a esa escala.
 export const fmtCorto = (n: number) => {
@@ -41,3 +50,15 @@ export function fmtPeriodo(periodo: string): string {
   const [y, m] = periodo.split('-').map(Number);
   return `${MESES[m - 1] ?? m} ${y}`;
 }
+
+// Para los campos de monto de antd. "1350000" no se lee: en pesos argentinos un
+// sueldo tiene siete digitos y sin puntos es facil escribir uno de mas sin darse
+// cuenta. El campo agrupa los miles mientras se tipea, con la coma como
+// separador decimal, que es como se escribe un monto aca.
+export const agruparMiles = (v: string | number | undefined) =>
+  v === undefined || v === '' ? '' : Number(v).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+
+export const desagruparMiles = (v: string | undefined) => {
+  const n = Number((v ?? '').replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};

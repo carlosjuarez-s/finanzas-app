@@ -22,7 +22,7 @@
  * −10% real anual, el techo llega antes de lo que uno cree.
  */
 
-import { tasaMensual } from './proyeccion';
+import { tasaMensual, type PuntoProyeccion, type Estrategia } from './proyeccion';
 
 /** El techo de una anualidad con tasa negativa. Infinity si la tasa no lo tiene. */
 export function techo(aporteMensual: number, tasaAnualPct: number): number {
@@ -118,4 +118,44 @@ export function reparto(saldo: number, aportado: number): { rendimiento: number;
     rendimiento,
     pctRendimiento: saldo > 0 ? (rendimiento / saldo) * 100 : 0,
   };
+}
+
+/**
+ * El detalle mes a mes de una estrategia.
+ *
+ * El grafico muestra la curva y la tabla del reparto muestra el final; esto
+ * muestra el mecanismo: en cada fila se ve **cuanto puso el interes ese mes**,
+ * un numero que arranca en cero y crece solo, sin que uno aporte mas. Es la
+ * unica vista donde el interes compuesto se ve pasar en vez de deducirse.
+ *
+ * Se deriva de los mismos `puntos` que dibuja el grafico, no se recalcula: si
+ * fuera otra cuenta, la tabla y la curva podrian discrepar.
+ */
+export type FilaMes = {
+  mes: number;
+  periodo: string;
+  aporte: number;       // lo que pusiste vos ESE mes
+  aportado: number;     // acumulado que pusiste vos
+  rindio: number;       // lo que puso el interes ESE mes
+  rendimiento: number;  // acumulado que puso el interes
+  saldo: number;        // aportado + rendimiento, siempre
+};
+
+export function mesAMes(puntos: PuntoProyeccion[], estrategia: Estrategia): FilaMes[] {
+  return puntos.map((p, i) => {
+    const previo = i === 0 ? null : puntos[i - 1];
+    const saldo = p.saldos[estrategia];
+    const rendimiento = saldo - p.aportado;
+    return {
+      mes: p.mes,
+      periodo: p.periodo,
+      // El mes 0 no tiene aporte: su "aportado" es el saldo con el que se
+      // arranca, no plata que entre ese mes.
+      aporte: previo ? p.aportado - previo.aportado : 0,
+      aportado: p.aportado,
+      rindio: previo ? rendimiento - (previo.saldos[estrategia] - previo.aportado) : 0,
+      rendimiento,
+      saldo,
+    };
+  });
 }

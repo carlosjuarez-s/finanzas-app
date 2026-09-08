@@ -4,21 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, InputNumber, Select, Space, Typography, Tag } from 'antd';
 import { mezcla, type Sueldo } from '@/lib/sueldo';
-import { fmtArs, fmtUsd, fmtPct, fmtPeriodo } from '@/lib/formato';
+import { fmtArs, fmtUsd, fmtPct, fmtPeriodo, agruparMiles, desagruparMiles } from '@/lib/formato';
 
 const { Text } = Typography;
-
-// "1350000" no se lee: en pesos argentinos un sueldo tiene siete digitos y sin
-// puntos es facil escribir uno de mas sin darse cuenta. El campo agrupa los
-// miles mientras se tipea, con la coma como separador decimal, que es como se
-// escribe un monto acá.
-const agrupar = (v: string | number | undefined) =>
-  v === undefined || v === '' ? '' : Number(v).toLocaleString('es-AR', { maximumFractionDigits: 2 });
-
-const desagrupar = (v: string | undefined) => {
-  const n = Number((v ?? '').replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-};
 
 // El sueldo del mes, cargado a mano y en las dos monedas.
 //
@@ -110,12 +98,12 @@ export default function SueldoManual({ periodo, anterior, actual, tipoCambio }: 
             <Select value={mes} onChange={setMes} options={OPCIONES} style={{ width: 200 }} />
             <InputNumber
               value={ars} onChange={setArs} min={0} style={{ width: 180 }}
-              formatter={agrupar} parser={desagrupar}
+              formatter={agruparMiles} parser={desagruparMiles}
               prefix="$" aria-label="Neto en pesos" placeholder="Neto en pesos"
             />
             <InputNumber
               value={usd} onChange={setUsd} min={0} style={{ width: 180 }}
-              formatter={agrupar} parser={desagrupar}
+              formatter={agruparMiles} parser={desagruparMiles}
               prefix="U$S" aria-label="Neto en dólares" placeholder="Neto en dólares"
             />
           </Space>

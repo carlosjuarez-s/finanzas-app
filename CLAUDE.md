@@ -841,6 +841,71 @@ que salió de la tabla a una frase arriba, y la moneda salió de cada celda al
 encabezado (`Interés (U$S)`). Quedó en 288px. `fmtNumEntero` existe para eso:
 tabla donde la moneda ya está en el encabezado.
 
+## El simulador: tres formas de decir el mismo escenario
+
+El simulador arrancó con **una** manera de expresar el aporte: un slider de
+porcentaje del ingreso. Sirve para pensar ("¿y si ahorro el 30%?") pero no para
+decidir ("puedo poner 200.000 por mes"), y obligaba a hacer la regla de tres a
+mano. Ahora hay dos modos, y el que no está activo no aparece: porcentaje o
+monto fijo, y el monto se escribe en pesos o en dólares.
+
+Cambiar de moneda **convierte lo escrito**, no lo deja igual: sin eso, pasar de
+pesos a dólares volvía 200.000 pesos en 200.000 dólares sin avisar. Y sin monto
+escrito el campo arranca en lo que da el slider, así cambiar de modo no borra el
+escenario que uno venía mirando.
+
+### Desde qué mes
+
+La proyección siempre aceptó `desde`, pero la pantalla lo dejaba en el mes en
+curso. Se elige entre los próximos 24 meses. Más que eso no es un plan.
+
+Empezar en un mes futuro **no proyecta lo que pasa hasta ahí**: arranca con el
+saldo de hoy, y la pantalla lo dice con todas las letras cuando el mes elegido no
+es el actual. Suponer aportes en el medio sería inventar justo la plata que
+todavía no se decidió poner.
+
+`hoy` llega **por prop desde el servidor**. Un `new Date()` en el render de un
+componente de cliente se evalúa también en el SSR, y las dos corridas pueden caer
+en meses distintos.
+
+### Mes a mes
+
+La tercera vista del mismo cálculo, y la única donde el interés compuesto **se ve
+pasar** en vez de deducirse: la columna «Rindió» arranca casi en cero y sube
+todos los meses sin que uno aporte un peso más. `mesAMes()` deriva las filas de
+los mismos `puntos` que dibuja el gráfico —no recalcula nada— y hay un test que
+fija el invariante: `aportado + rendimiento === saldo` en cada fila, en las tres
+estrategias.
+
+A 30 años son 361 filas: la tabla scrollea ella, no la página, con el encabezado
+sticky. El borde de ese encabezado va por `box-shadow` y no por `border`: con
+`border-collapse`, un border sobre un `th` sticky no viaja con el `th` y
+desaparece al scrollear.
+
+### Tres bugs que encontró `scripts/responsive.mjs`
+
+El chequeo de mobile no se puede correr sobre las páginas que necesitan base de
+datos, así que estos venían de antes y no se veían:
+
+- **Los campos de Supuestos tenían 0px útiles a 320px.** El rótulo y su ayuda se
+  comían el `.supuesto` flex y el número no se veía **ni se podía editar** —
+  justo el tipo de cambio, que es lo que hay que cargar en la primera corrida.
+  Apilados abajo de 420px, el input pasa de 0 a 130px visibles.
+- **Los encabezados `.bimoneda th` estaban en 10,5px**, abajo del mínimo de 11
+  que exige el script. Subirlos no rompió ningún ancho: las tablas siguen en
+  288px sobre 320.
+- **El `Segmented` de antd mide 28px de alto**, abajo del mínimo táctil de 32.
+  `size="large"` lo lleva a 40.
+
+### Ningún número se muestra como «-0»
+
+`toLocaleString` escribe `-0` para `-1e-12`, y un menos adelante de un cero se
+lee como una pérdida que no existió: la fila «Dólares» del reparto mostraba
+`-0 (0%)`. El redondeo a cero se hace en `num()`, así que vale para todos los
+formatos a la vez, y `fmtNumConSigno` decide el signo sobre el número **ya
+redondeado** — si no, `+0,4` sale «+0» y `-0,4` sale «0», dos formas distintas
+del mismo cero.
+
 ## Idioma
 
 Código, comentarios, commits e interfaz en castellano rioplatense.

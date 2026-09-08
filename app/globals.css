@@ -216,6 +216,13 @@ section > h2 {
 .nav a:visited { color: var(--tinta); }
 
 .supuesto { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 6px 0; }
+/* En un telefono angosto el rotulo y su ayuda se comen el campo: el input queda
+   con 0px utiles y el numero no se ve ni se puede editar. Apilados, el campo
+   entra entero. Medido a 320px: el ancho visible del input pasa de 0 a 130. */
+@media (max-width: 420px) {
+  .supuesto { flex-direction: column; align-items: stretch; gap: 4px; }
+  .supuesto .ant-input-number { width: 100% !important; max-width: 220px; }
+}
 .nota {
   font-size: 12px; color: var(--tinta-suave); border-left: 2px solid var(--linea);
   padding-left: 10px; margin: 12px 0;
@@ -709,7 +716,7 @@ section > h2 {
    ancho fijo: es lo unico que hace comparable una columna de montos. */
 .bimoneda { border-collapse: collapse; width: 100%; font-size: 14px; }
 .bimoneda th {
-  font-family: var(--font-data); font-size: 10.5px;
+  font-family: var(--font-data); font-size: 11px;
   text-transform: uppercase; letter-spacing: .09em;
   color: var(--rotulo); font-weight: 600; text-align: right;
   padding: 0 0 7px 9px; border-bottom: 1px solid var(--linea); white-space: nowrap;
@@ -719,6 +726,17 @@ section > h2 {
 .bimoneda td:first-child { padding-left: 0; }
 .bimoneda .monto { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bimoneda .total td { border-top: 1px solid var(--linea); border-bottom: none; font-weight: 600; }
+
+/* La tabla mes a mes puede tener 361 filas a 30 años: scrollea ella, no la
+   pagina, y el encabezado queda fijo para no perder de vista qué columna es
+   cuál. El borde del encabezado va por box-shadow: con border-collapse, un
+   border sobre un th sticky no viaja con el th y desaparece al scrollear. */
+.mes-a-mes { max-height: 60vh; overflow-y: auto; }
+.mes-a-mes thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--papel); border-bottom: none;
+  box-shadow: inset 0 -1px 0 var(--linea);
+}
 
 /* Los pasos del plan. Numerados porque son una secuencia real: primero saber
    dónde estás, después cuánto falta, después de dónde sale. */

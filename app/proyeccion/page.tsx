@@ -65,6 +65,7 @@ export default async function Proyeccion() {
         gastoMensualArs={prom.gastoArs}
         mesesDeDatos={prom.meses}
         ahorroAcumuladoUsd={acumuladoUsd}
+        hoy={new Date().toISOString().slice(0, 7)}
       />
     </main>
   );
