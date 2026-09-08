@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import { proximoPeriodo } from '@/lib/estimacion';
+import { sumarMeses } from '@/lib/prestamos';
 import { estimacionDeMes } from '@/lib/estimar-mes';
-import { periodosConDatos, conMesActual } from '@/lib/periodos';
 import SelectorMes from '../selector-mes';
-import { fmtArs, fmtPeriodo } from '@/lib/formato';
+import { fmtArs, fmtUsd, fmtArsEntero, fmtUsdEntero, fmtPeriodo } from '@/lib/formato';
 import { tablaFaltante } from '@/lib/errores';
 import { idUsuarioActual } from '@/lib/usuario';
 import Nav from '../nav';
@@ -32,16 +31,15 @@ export default async function Estimacion({ searchParams }: {
   let periodos: string[];
   let datos: Awaited<ReturnType<typeof estimacionDeMes>>;
   try {
-    // Se puede estimar cualquier mes, no solo el que viene: mirar como se
-    // habria estimado un mes que ya paso es la unica forma de saber si la
-    // estimacion sirve.
-    const conDatos = await periodosConDatos(usuarioId);
-    const ultimo = conDatos[0];
-    periodos = conMesActual(
-      [...new Set([...conDatos, proximoPeriodo(ultimo, hoy)])].sort().reverse(),
-      hoy,
-    );
-    datos = await estimacionDeMes(usuarioId, qp && periodos.includes(qp) ? qp : periodos[0]);
+    // Solo meses FUTUROS. El mes en curso no se estima: se esta cargando, y
+    // su numero real vive en el cierre. Ofrecerlo acá seria dar dos numeros
+    // del mismo mes donde uno ya es el verdadero.
+    //
+    // Se ofrecen doce, no uno: los gastos fijos ya saben cuanto valen dentro
+    // de seis meses con sus aumentos, y ver eso es justamente para lo que
+    // sirven.
+    periodos = Array.from({ length: 12 }, (_, i) => sumarMeses(hoy, i + 1)).reverse();
+    datos = await estimacionDeMes(usuarioId, qp && periodos.includes(qp) ? qp : sumarMeses(hoy, 1));
   } catch (e) {
     const tabla = tablaFaltante(e);
     if (!tabla) throw e;
@@ -70,13 +68,63 @@ export default async function Estimacion({ searchParams }: {
       <Nav />
       <p className="eyebrow">Estimación</p>
       <h1>{fmtPeriodo(periodo)}</h1>
-      <SelectorMes periodos={periodos} actual={periodo} hoy={hoy} />
+      {/* Sin boton de "mes actual": el mes en curso no se estima. */}
+      <SelectorMes periodos={periodos} actual={periodo} />
 
       {/* Lo primero que hay que saber es que esto no es un dato. */}
       <p className="nota" style={{ borderLeftColor: 'var(--alerta)' }}>
         Esto <strong>no</strong> es un mes cerrado: es una estimación y no entra al histórico.
         Cuando el mes pase y cargues los comprobantes, el número real lo reemplaza.
       </p>
+
+      {/* Las dos monedas, una al lado de la otra. Es la pregunta que uno se
+          hace cobrando 70/30: cuanto de lo que sale es en pesos y cuanto en
+          dolares, porque no se consiguen igual. */}
+      {(e.totalUsd > 0 || e.ingresoUsd > 0) && (
+        <section>
+          <h2>En pesos y en dólares</h2>
+          <div className="tabla">
+            <table className="bimoneda">
+              <thead>
+                <tr><th></th><th>En pesos</th><th>En dólares</th><th>Total</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Entra</td>
+                  <td className="monto ars">{fmtArsEntero(e.ingresoSoloArs)}</td>
+                  <td className="monto usd">{e.ingresoUsd > 0 ? fmtUsdEntero(e.ingresoUsd) : '—'}</td>
+                  <td className="monto ars">{e.ingresoReferenciaArs === null ? '—' : fmtArsEntero(e.ingresoReferenciaArs)}</td>
+                </tr>
+                <tr>
+                  <td>Cuotas</td>
+                  <td className="monto ars">{fmtArsEntero(e.comprometidoSoloArs)}</td>
+                  <td className="monto usd">{e.comprometidoUsd > 0 ? fmtUsdEntero(e.comprometidoUsd) : '—'}</td>
+                  <td className="monto ars">{fmtArsEntero(e.comprometidoArs)}</td>
+                </tr>
+                <tr>
+                  <td>Fijos</td>
+                  <td className="monto ars">{fmtArsEntero(e.fijoSoloArs)}</td>
+                  <td className="monto usd">{e.fijoUsd > 0 ? fmtUsdEntero(e.fijoUsd) : '—'}</td>
+                  <td className="monto ars">{fmtArsEntero(e.fijoArs)}</td>
+                </tr>
+                <tr className="total">
+                  <td>Sale sí o sí</td>
+                  <td className="monto ars">{fmtArsEntero(e.comprometidoSoloArs + e.fijoSoloArs)}</td>
+                  <td className="monto usd">{e.totalUsd > 0 ? fmtUsdEntero(e.totalUsd) : '—'}</td>
+                  <td className="monto ars">{fmtArsEntero(e.totalArs)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="nota">
+            La última columna es la suma de las dos primeras
+            {datos.tipoCambio && `, con el dólar a $${datos.tipoCambio.toLocaleString('es-AR')}`}
+            {datos.tipoCambioDe && ` (el del cierre de ${fmtPeriodo(datos.tipoCambioDe)})`}.
+            {' '}La referencia del historial no está partida: el histórico guarda el gasto por
+            categoría solo en pesos.
+          </p>
+        </section>
+      )}
 
       {e.periodoDelIngreso && (
         <p className="nota">
@@ -94,11 +142,19 @@ export default async function Estimacion({ searchParams }: {
         <div className="celda">
           <p className="eyebrow">Sale sí o sí</p>
           <p className="valor ars">{fmtArs(e.totalArs)}</p>
+          {/* El desglose por moneda, no un monto aparte: los dolares ya estan
+              adentro del total, convertidos al tipo de cambio de referencia. */}
+          {e.totalUsd > 0 && (
+            <p className="monto usd" style={{ fontSize: 12 }}>incluye {fmtUsd(e.totalUsd)}</p>
+          )}
         </div>
         <div className="op">·</div>
         <div className="celda">
           <p className="eyebrow">De eso, cuotas</p>
           <p className="valor ars">{fmtArs(e.comprometidoArs)}</p>
+          {e.comprometidoUsd > 0 && (
+            <p className="monto usd" style={{ fontSize: 12 }}>incluye {fmtUsd(e.comprometidoUsd)}</p>
+          )}
         </div>
         <div className="op">·</div>
         <div className="celda">

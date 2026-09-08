@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { fmtArs, fmtPeriodo } from '@/lib/formato';
+import { fmtArs, fmtUsd, fmtPeriodo } from '@/lib/formato';
 import type { Estimacion } from '@/lib/estimacion';
 import StackedBar from './stacked-bar';
 import Monto from './monto';
@@ -58,6 +58,11 @@ export default function Estimado({ e, periodo, cargadoArs, hayDatos }: {
         <div className="celda">
           <p className="eyebrow">Sale sí o sí</p>
           <p className="valor ars">{fmtArs(e.totalArs)}</p>
+          {/* Los dolares ya estan adentro del total: es el desglose, no un
+              monto aparte que haya que sumar. */}
+          {e.totalUsd > 0 && (
+            <p className="monto usd" style={{ fontSize: 12 }}>incluye {fmtUsd(e.totalUsd)}</p>
+          )}
           {avance !== null && (
             <p className="monto" style={{ fontSize: 12 }}>
               llevás {fmtArs(cargadoArs ?? 0)} cargado{avance > 0 && ` · ${avance}%`}
@@ -70,6 +75,9 @@ export default function Estimado({ e, periodo, cargadoArs, hayDatos }: {
           <p className="valor ars">
             {e.ingresoReferenciaArs === null ? '—' : fmtArs(e.ingresoReferenciaArs)}
           </p>
+          {e.ingresoUsd > 0 && (
+            <p className="monto usd" style={{ fontSize: 12 }}>incluye {fmtUsd(e.ingresoUsd)}</p>
+          )}
           {e.periodoDelIngreso && (
             <p className="monto" style={{ fontSize: 12 }}>
               el sueldo de {fmtPeriodo(e.periodoDelIngreso)}

@@ -55,9 +55,11 @@ export async function estimacionDeMes(usuarioId: string, periodo: string): Promi
 
   // El ultimo sueldo conocido, sin proyectar aumentos: inventar una paritaria
   // seria agregarle un error propio a una estimacion que ya tiene el suyo.
-  const ingresoRef = ultimoSueldo
-    ? consolidar({ ars: Number(ultimoSueldo.netoArs), usd: Number(ultimoSueldo.netoUsd) }, tipoCambio).totalArs
-    : null;
+  const sueldo = {
+    ars: Number(ultimoSueldo?.netoArs ?? 0),
+    usd: Number(ultimoSueldo?.netoUsd ?? 0),
+  };
+  const ingresoRef = ultimoSueldo ? consolidar(sueldo, tipoCambio).totalArs : null;
 
   const delMes = totalDeFijos(fijos, periodo, indices);
   const fijosArs = consolidar(delMes.monto, tipoCambio).totalArs;
@@ -65,9 +67,12 @@ export async function estimacionDeMes(usuarioId: string, periodo: string): Promi
   const estimacion = estimar(periodo, historico, prestamos, ingresoRef, {
     tipoCambio,
     periodoDelIngreso: ultimoSueldo?.periodo ?? null,
+    ingreso: sueldo,
     fijos: {
       porCategoria: delMes.porCategoria,
       totalArs: fijosArs ?? delMes.monto.ars,
+      ars: delMes.monto.ars,
+      usd: delMes.monto.usd,
       faltaIndice: delMes.faltaIndice,
     },
   });

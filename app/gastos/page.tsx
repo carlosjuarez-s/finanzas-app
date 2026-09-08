@@ -23,7 +23,7 @@ import { listar as listarFijos, leerIndices, yaEsFijo, type Recurrente, type Ind
 import { listar as listarIngresos } from '@/lib/ingresos';
 import Editor, { type Item } from './editor';
 import { leerCategorias } from '@/lib/categorias';
-import { periodosConDatos } from '@/lib/periodos';
+import { periodosConDatos, conMesActual } from '@/lib/periodos';
 import SelectorMes from '../selector-mes';
 import FiltroCategoria from './filtro-categoria';
 import Secciones, { type Seccion } from '../secciones';
@@ -45,6 +45,7 @@ export default async function Gastos({ searchParams }: {
   // La fecha la fija el servidor: si la calculara el cliente, dos telefonos en
   // zonas distintas mostrarian "hace 7 meses" y "hace 8" para el mismo prestamo.
   const hoyISO = new Date().toISOString().slice(0, 10);
+  const hoyMes = hoyISO.slice(0, 7);
   const categorias = await leerCategorias(usuarioId);
 
   let periodo: string | undefined;
@@ -91,9 +92,13 @@ export default async function Gastos({ searchParams }: {
       .where(eq(gastos.usuarioId, usuarioId))
       .orderBy(desc(gastos.periodo)).limit(1);
 
-    // El mes mas reciente con algo cargado, sea tarjeta o gasto suelto.
-    periodo = qp ?? [ultimoSt?.periodo, ultimoGasto[0]?.periodo].filter(Boolean).sort().pop();
-    periodos = await periodosConDatos(usuarioId);
+    // Por defecto, el mes en curso: uno abre esta pantalla para cargar o
+    // corregir lo del mes que esta viviendo. Antes era el mas reciente CON
+    // datos, que despues de importar tres años podia ser cualquiera.
+    periodos = conMesActual(await periodosConDatos(usuarioId), hoyMes);
+    periodo = qp && periodos.includes(qp) ? qp
+      : periodos.includes(hoyMes) ? hoyMes
+      : [ultimoSt?.periodo, ultimoGasto[0]?.periodo].filter(Boolean).sort().pop();
     if (!periodo) {
       // Sin gastos todavia se puede estar pagando un credito, y hay que poder
       // cargarlo: si no, la unica forma de llegar a esta seccion seria subir
@@ -307,7 +312,8 @@ export default async function Gastos({ searchParams }: {
       <p className="eyebrow">Gastos · {fmtPeriodo(periodo)}</p>
       <h1>Revisar y corregir</h1>
       {periodos.length > 1 && (
-        <SelectorMes periodos={periodos} actual={periodo} conservar={{ categoria: filtro }} />
+        <SelectorMes periodos={periodos} actual={periodo} hoy={hoyMes}
+          conservar={{ categoria: filtro }} />
       )}
       <p className="resultado">
         Todo esto lo interpretó un modelo a partir de tus documentos. Si algo quedó mal,

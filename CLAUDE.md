@@ -116,6 +116,18 @@ estimacion, y nadie lo iba a notar mirando la estimacion.
 
 ## La estimacion son los fijos, no un pronostico
 
+Las cifras van **partidas en pesos y dolares**, con una tabla de tres columnas:
+lo que entra o sale en pesos, lo que entra o sale en dolares, y el total
+consolidado. Es la pregunta que uno se hace cobrando 70/30, y sin ella la
+estimacion daba un solo numero en pesos que escondia de donde salia.
+
+Los dolares **ya estan adentro** de las cifras en pesos: es el desglose de un
+total consolidado, no plata aparte que haya que sumar. Por eso en las tarjetas
+dice "incluye U$S X" y no "+ U$S X".
+
+La referencia del historial es lo unico que no se puede partir: `monthly_closes`
+guarda el gasto por categoria solo en pesos. Se dice en la pantalla.
+
 El total de la estimacion es **comprometido + fijo**, y nada mas: las cuotas
 que ya caen y los gastos que declaraste, resueltos mes a mes con su aumento.
 Es un **piso** —lo que va a salir si o si— y no un pronostico del gasto del
@@ -136,6 +148,27 @@ total**: ese es el camino que la pantalla propone, con el link puesto.
 
 Sin fijos declarados el total son solo las cuotas, y eso se avisa fuerte: un
 numero que parece completo cuando no hay nada declarado es peor que un cero.
+
+## El mes en curso no se estima: se esta cargando
+
+Solo los meses **futuros** se estiman. El mes en curso tiene sus gastos
+entrando y su cierre se recalcula solo con cada uno: poner al lado una
+estimacion es mostrar dos numeros del mismo mes donde uno ya es el real.
+
+Lo que si hace falta decir del mes en curso es que **todavia no cerro**, para
+que nadie lea sus numeros como el mes completo. Eso es una linea de texto, no
+una estimacion.
+
+Por eso Estimacion ofrece los proximos doce meses y ninguno anterior, y su
+selector no lleva boton de "mes actual": no hay mes actual que estimar. Doce y
+no uno porque los gastos fijos ya saben cuanto valen dentro de seis meses con
+sus aumentos, y ver eso es justamente para lo que sirven.
+
+## Todas las pantallas abren en el mes en curso
+
+El cierre y Gastos abren en el mes que se esta viviendo, no en el mas nuevo con
+datos. Con un import de tres años eso ultimo puede ser cualquier mes, y uno
+abre la app para ver el mes de hoy.
 
 ## El mes que no cerro se estima, y se dice que es una estimacion
 

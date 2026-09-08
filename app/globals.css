@@ -704,3 +704,18 @@ section > h2 {
 }
 .referencia strong { font-weight: 600; }
 .referencia .nota { margin-bottom: 0; }
+
+/* Tabla de las dos monedas. Los numeros alineados a la derecha y con cifras de
+   ancho fijo: es lo unico que hace comparable una columna de montos. */
+.bimoneda { border-collapse: collapse; width: 100%; font-size: 14px; }
+.bimoneda th {
+  font-family: var(--font-data); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .09em;
+  color: var(--rotulo); font-weight: 600; text-align: right;
+  padding: 0 0 7px 9px; border-bottom: 1px solid var(--linea); white-space: nowrap;
+}
+.bimoneda th:first-child { text-align: left; padding-left: 0; }
+.bimoneda td { padding: 8px 0 8px 9px; border-bottom: 1px solid var(--linea-fina); }
+.bimoneda td:first-child { padding-left: 0; }
+.bimoneda .monto { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bimoneda .total td { border-top: 1px solid var(--linea); border-bottom: none; font-weight: 600; }

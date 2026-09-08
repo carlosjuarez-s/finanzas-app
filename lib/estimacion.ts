@@ -53,6 +53,14 @@ export type Estimacion = {
   fijoArs: number;
   /** El total: comprometido + fijo. Nada mas. Es un piso, no un pronostico. */
   totalArs: number;
+  /** Las partes en dolares, YA incluidas en las cifras en pesos de arriba.
+   *  No se suman aparte: es el desglose de un total consolidado. */
+  comprometidoUsd: number;
+  fijoUsd: number;
+  totalUsd: number;
+  /** Y la parte que ya venia en pesos, para poder decir "tanto y tanto". */
+  comprometidoSoloArs: number;
+  fijoSoloArs: number;
   /** Lo que el historico dice que ademas gastas, FUERA del total. */
   recurrenteArs: number;
   variableArs: number;
@@ -62,6 +70,9 @@ export type Estimacion = {
   lineas: LineaEstimada[];
   /** Ingreso de referencia: el ultimo conocido, sin proyectar aumentos. */
   ingresoReferenciaArs: number | null;
+  /** Partido, igual que el gasto. Los dolares ya estan en la cifra de arriba. */
+  ingresoSoloArs: number;
+  ingresoUsd: number;
   /** De que mes salio ese sueldo. Sin decirlo, el numero no se puede auditar
    *  ni corregir: hay que saber cual ir a tocar. */
   periodoDelIngreso: string | null;
@@ -94,7 +105,16 @@ export function estimar(
     /** El mes del sueldo que se uso como referencia. */
     periodoDelIngreso?: string | null;
     /** Los gastos fijos declarados, ya resueltos para el mes que se estima. */
-    fijos?: { porCategoria: Record<string, number>; totalArs: number; faltaIndice: string[] };
+    fijos?: {
+      porCategoria: Record<string, number>;
+      totalArs: number;
+      /** Las partes crudas, para poder mostrar el reparto entre monedas. */
+      ars?: number;
+      usd?: number;
+      faltaIndice: string[];
+    };
+    /** El sueldo de referencia, partido. */
+    ingreso?: { ars: number; usd: number };
   } = {},
 ): Estimacion {
   const cuantos = Math.min(Math.max(1, opciones.mesesAMirar ?? 6), 24);
@@ -134,6 +154,7 @@ export function estimar(
 
   const fijos = opciones.fijos ?? { porCategoria: {}, totalArs: 0, faltaIndice: [] };
   const fijoArs = fijos.totalArs;
+  const ingresoPartido = opciones.ingreso ?? { ars: ingresoReferenciaArs ?? 0, usd: 0 };
 
   for (const [categoria, valores] of porCategoria) {
     // "Cuotas" ya viene por el lado de los prestamos: contarla tambien desde el
@@ -224,9 +245,16 @@ export function estimar(
     periodo,
     mesesUsados: meses.length,
     comprometidoArs, fijoArs, totalArs,
+    comprometidoUsd: cuotas.usd,
+    fijoUsd: fijos.usd ?? 0,
+    totalUsd: comprometido.usd + (fijos.usd ?? 0),
+    comprometidoSoloArs: cuotas.ars,
+    fijoSoloArs: fijos.ars ?? fijoArs,
     recurrenteArs, variableArs, referenciaArs, probableArs,
     lineas,
     ingresoReferenciaArs,
+    ingresoSoloArs: ingresoPartido.ars,
+    ingresoUsd: ingresoPartido.usd,
     periodoDelIngreso: opciones.periodoDelIngreso ?? null,
     ahorroEstimadoArs: ingresoReferenciaArs === null ? null : ingresoReferenciaArs - totalArs,
     advertencias,

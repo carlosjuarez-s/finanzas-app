@@ -7,6 +7,11 @@ export const fmtArs = (n: number) => '$ ' + num(n);
 export const fmtUsd = (n: number) => 'U$S ' + num(n);
 export const fmtPct = (n: number) => num(n, 1) + '%';
 
+// Sin centavos. En una estimacion los centavos son ruido, y en una tabla de
+// varias columnas son la diferencia entre que entre en un telefono o no.
+export const fmtArsEntero = (n: number) => '$ ' + num(n, 0);
+export const fmtUsdEntero = (n: number) => 'U$S ' + num(n, 0);
+
 // Para ejes: los miles llenan el eje y no aportan nada a esa escala.
 export const fmtCorto = (n: number) => {
   const abs = Math.abs(n);

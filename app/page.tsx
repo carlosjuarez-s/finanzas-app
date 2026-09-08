@@ -41,7 +41,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const hoy = new Date().toISOString().slice(0, 7);
   const conDatos = await periodosConDatos(usuarioId);
   const periodos = conMesActual(conDatos, hoy);
-  const periodo = qp && periodos.includes(qp) ? qp : periodos[0];
+  // Por defecto, el mes en curso. Antes era el mas nuevo con datos, que con un
+  // import de tres años podia ser cualquiera: uno abre la app para ver el mes
+  // que esta viviendo, no el ultimo que cargo.
+  const periodo = qp && periodos.includes(qp) ? qp : (periodos.includes(hoy) ? hoy : periodos[0]);
   if (!periodo) {
     return (
       <main>
@@ -83,8 +86,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   //
   // Para el mes en curso y los que vienen, se calcula ademas la estimacion. NO
   // se guarda: se muestra aparte, y el cierre de arriba sigue siendo lo real.
-  const aunNoCerro = periodo >= hoy;
-  const estimado = aunNoCerro ? await estimacionDeMes(usuarioId, periodo) : null;
+  //
+  // Solo los meses FUTUROS se estiman. El mes en curso se esta cargando: sus
+  // gastos van entrando y su cierre se recalcula solo, asi que poner al lado
+  // una estimacion es mostrar dos numeros del mismo mes donde uno ya es el
+  // real. Lo que si hace falta decir es que todavia no cerro.
+  const enCurso = periodo === hoy;
+  const esFuturo = periodo > hoy;
+  const estimado = esFuturo ? await estimacionDeMes(usuarioId, periodo) : null;
   const hayDatosDelMes = sts.length > 0 || cierre.ingresoArs > 0 || cierre.ingresoUsd > 0 || gastoArs > 0;
 
   // Las tres partes en que se divide el sueldo. Se agrupa en tres a proposito:
@@ -146,11 +155,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
       <PrimerosPasos arranque={await primerosPasos(usuarioId)} />
 
-      {aunNoCerro && (
+      {enCurso && (
         <p className="nota">
           {hayDatosDelMes
-            ? 'Este mes todavía no cerró: los números de acá arriba son lo que ya cargaste, no el mes completo. Más abajo está la estimación.'
-            : 'Este mes todavía no tiene nada cargado. Más abajo está lo que se estima que va a ser.'}
+            ? 'Este mes todavía no cerró: son los números de lo que ya cargaste, y se actualizan con cada gasto que entra.'
+            : 'Este mes todavía no tiene nada cargado. A medida que carguen los gastos, estos números se llenan solos.'}
+          {' '}
+          <Link href="/estimacion">Ver la estimación del mes que viene</Link>.
         </p>
       )}
 

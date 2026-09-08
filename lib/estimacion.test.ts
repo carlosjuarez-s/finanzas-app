@@ -194,3 +194,36 @@ test('si al indice de un fijo le falto un mes, se avisa', () => {
   const e = estimar('2026-09', [], [], null, { fijos });
   assert.ok(e.advertencias.some(a => /índice/.test(a)), e.advertencias.join(' | '));
 });
+
+test('la estimacion separa pesos de dolares sin sumarlos dos veces', () => {
+  // Las cifras en pesos son las consolidadas; las de dolares son el desglose
+  // de esas mismas, no plata aparte.
+  const fijos = {
+    porCategoria: { Alquiler: 500_000, Otros: 30_000 },
+    totalArs: 530_000, ars: 500_000, usd: 20,
+    faltaIndice: [],
+  };
+  const e = estimar('2026-09', [], [], 1_500_000, {
+    tipoCambio: 1_500,
+    fijos,
+    ingreso: { ars: 900_000, usd: 400 },
+  });
+  assert.equal(e.fijoArs, 530_000);
+  assert.equal(e.fijoSoloArs, 500_000);
+  assert.equal(e.fijoUsd, 20);
+  // 500.000 + 20 × 1.500 = 530.000: el desglose cierra con el total.
+  assert.equal(e.fijoSoloArs + e.fijoUsd * 1_500, e.fijoArs);
+  assert.equal(e.ingresoSoloArs, 900_000);
+  assert.equal(e.ingresoUsd, 400);
+});
+
+test('una cuota en dolares aparece en el desglose del comprometido', () => {
+  const enDolares = {
+    id: 'p1', nombre: 'Notebook', moneda: 'USD', cuotas: 12, cuotaArs: 200,
+    primerPeriodo: '2026-01', cftAnual: null, canceladoEn: null, entidad: null, montoOtorgado: null,
+  };
+  const e = estimar('2026-03', [], [enDolares], null, { tipoCambio: 1_500 });
+  assert.equal(e.comprometidoUsd, 200);
+  assert.equal(e.comprometidoSoloArs, 0);
+  assert.equal(e.comprometidoArs, 300_000);
+});
