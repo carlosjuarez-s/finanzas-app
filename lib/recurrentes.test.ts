@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  caeEn, ajustes, montoEn, proximoAjuste, totalDelMes, validar, parsearIndice, type Recurrente,
+  caeEn, ajustes, montoEn, proximoAjuste, totalDelMes, validar, parsearIndice,
+  desdeUnGasto, yaEsFijo, type Recurrente,
 } from './recurrentes';
 
 const base: Recurrente = {
@@ -162,4 +163,28 @@ test('una linea que no se entiende se reporta con su numero, no se descarta', ()
 
 test('un mes que no existe en el indice se rechaza', () => {
   assert.equal(parsearIndice('2026-13: 2,4').ok, false);
+});
+
+test('un gasto cargado se vuelve fijo con los defaults mas comunes', () => {
+  const r = desdeUnGasto(
+    { concepto: 'Alquiler', categoria: 'Alquiler', montoArs: 500_000, montoUsd: 0 },
+    '2026-09',
+  );
+  assert.equal(r.cadaMeses, 1);
+  assert.equal(r.primerPeriodo, '2026-09');
+  // El aumento queda sin definir: es lo unico que la fila del gasto no sabe.
+  assert.equal(r.aumentoPct, null);
+  assert.equal(r.aumentoCadaMeses, null);
+  // Y lo que sale de ahi tiene que pasar la misma validacion que el formulario.
+  assert.equal(validar(r).ok, true);
+});
+
+test('no se puede marcar dos veces el mismo gasto como fijo', () => {
+  // Tocarlo en enero y otra vez en febrero sobre el mismo alquiler dejaba dos
+  // fijos iguales sumando doble en cada estimacion.
+  const fijos = [{ concepto: 'Alquiler' }];
+  assert.equal(yaEsFijo(fijos, 'Alquiler'), true);
+  assert.equal(yaEsFijo(fijos, '  alquiler '), true);
+  assert.equal(yaEsFijo(fijos, 'Alquíler'), true);
+  assert.equal(yaEsFijo(fijos, 'Internet'), false);
 });

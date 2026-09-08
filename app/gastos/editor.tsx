@@ -22,7 +22,14 @@ export type Item = {
 
 // Las categorias llegan como prop desde el server: son del usuario, no una
 // lista fija que el cliente pueda conocer sola.
-export default function Editor({ item, categorias }: { item: Item; categorias: string[] }) {
+export default function Editor({ item, categorias, periodo, esFijo }: {
+  item: Item;
+  categorias: string[];
+  /** El mes de la fila. Es desde cuándo empieza a valer si se marca como fijo. */
+  periodo?: string;
+  /** Si ya existe un fijo con este concepto. */
+  esFijo?: boolean;
+}) {
   const OPCIONES = categorias.map(c => ({ value: c, label: c }));
   const [editando, setEditando] = useState(false);
   const [descripcion, setDescripcion] = useState(item.descripcion);
@@ -64,6 +71,21 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
     `/api/rectificar?entidad=gasto&id=${encodeURIComponent(item.id)}`,
   );
 
+  // Marcar la fila como gasto fijo sin volver a escribirla. Los defaults son
+  // los mas comunes —mensual, desde este mes, sin aumento— y el aumento se
+  // agrega despues, que es lo unico que esta fila no sabe.
+  const marcarFijo = () => pedir({
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      concepto: item.descripcion,
+      categoria: item.categoria ?? 'Otros',
+      montoArs: item.monto,
+      montoUsd: item.montoUsd ?? 0,
+      periodo,
+    }),
+  }, '/api/recurrentes');
+
   if (!editando) {
     return (
       <div className="fila">
@@ -73,6 +95,7 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
           {item.origen && <span className="chip">{item.origen.toLowerCase()}</span>}
           {/* Un dato corregido a mano vale mas que uno interpretado: que se vea. */}
           {item.corregido && <Tag color="green" style={{ marginLeft: 6 }}>corregido</Tag>}
+          {esFijo && <Tag color="purple" style={{ marginLeft: 6 }}>fijo</Tag>}
         </span>
         <Space size="small" wrap>
           {/* Un gasto puede venir entero en dolares: mostrar solo los pesos lo
@@ -83,8 +106,21 @@ export default function Editor({ item, categorias }: { item: Item; categorias: s
           {!!item.montoUsd && (
             <span className="monto usd">U$S {item.montoUsd.toLocaleString('es-AR')}</span>
           )}
+          {/* Solo cuando se sabe de que mes es la fila: sin eso no hay desde
+              cuando empieza a valer el fijo. */}
+          {periodo && !esFijo && (
+            <Popconfirm
+              title={`¿Marcar «${item.descripcion}» como gasto fijo?`}
+              description="Queda mensual desde este mes, sin aumento. El aumento se agrega después."
+              onConfirm={marcarFijo}
+              okText="Sí, es fijo" cancelText="No"
+            >
+              <Button size="small" loading={ocupado}>Es fijo</Button>
+            </Popconfirm>
+          )}
           <Button size="small" onClick={() => setEditando(true)}>Corregir</Button>
         </Space>
+        {error && <Text type="danger" className="resultado" style={{ display: 'block' }}>{error}</Text>}
       </div>
     );
   }

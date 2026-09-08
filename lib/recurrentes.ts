@@ -306,3 +306,41 @@ export function parsearIndice(texto: string): { ok: true; indice: Indice } | { o
   }
   return { ok: true, indice };
 }
+
+/**
+ * Convierte un gasto ya cargado en un gasto fijo.
+ *
+ * El camino largo era volver a escribir todo —concepto, categoria, monto— en
+ * un formulario aparte, teniendo la fila delante. Esto lo hace de un toque, con
+ * los valores por defecto mas comunes: mensual, desde ese mes, sin aumento. El
+ * aumento se agrega despues, porque es lo unico que la fila no sabe.
+ */
+export function desdeUnGasto(g: { concepto: string; categoria: string; montoArs: number; montoUsd: number }, periodo: string): Omit<Recurrente, 'id'> {
+  return {
+    concepto: g.concepto.trim() || 'Gasto fijo',
+    categoria: g.categoria || 'Otros',
+    montoArs: g.montoArs,
+    montoUsd: g.montoUsd,
+    cadaMeses: 1,
+    primerPeriodo: periodo,
+    hastaPeriodo: null,
+    aumentoPct: null,
+    aumentoCadaMeses: null,
+    indice: null,
+  };
+}
+
+/**
+ * Si ya hay un fijo con ese concepto.
+ *
+ * Sin esto, tocar el boton dos veces —o tocarlo en enero y otra vez en
+ * febrero sobre el mismo alquiler— dejaba dos fijos iguales sumando doble en
+ * cada estimacion, y nadie lo iba a notar mirando la estimacion.
+ */
+export function yaEsFijo(fijos: { concepto: string }[], concepto: string): boolean {
+  const n = sinAcentos(concepto);
+  return fijos.some(f => sinAcentos(f.concepto) === n);
+}
+
+const sinAcentos = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();

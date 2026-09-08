@@ -19,7 +19,7 @@ import Categorias from './categorias';
 import SueldoManual from './sueldo';
 import Ingresos, { type Fila as FilaIngreso } from './ingresos';
 import Fijos from './fijos';
-import { listar as listarFijos, leerIndices, type Recurrente, type Indice } from '@/lib/recurrentes';
+import { listar as listarFijos, leerIndices, yaEsFijo, type Recurrente, type Indice } from '@/lib/recurrentes';
 import { listar as listarIngresos } from '@/lib/ingresos';
 import Editor, { type Item } from './editor';
 import { leerCategorias } from '@/lib/categorias';
@@ -233,7 +233,10 @@ export default async function Gastos({ searchParams }: {
               <span className="chip">{fmtArs(visiblesGastos.reduce((s, i) => s + i.monto, 0))}</span>
             </h2>
             {visiblesGastos.length
-              ? visiblesGastos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)
+              ? visiblesGastos.map(i => (
+                  <Editor key={i.id} item={i} categorias={categorias}
+                    periodo={periodo} esFijo={yaEsFijo(fijos, i.descripcion)} />
+                ))
               : <p className="resultado">
                   {filtro
                     ? `Ningún gasto suelto de este mes es de «${filtro}».`
@@ -248,7 +251,10 @@ export default async function Gastos({ searchParams }: {
                 Corregir una línea reacomoda el desglose por categoría. El total del mes sigue
                 saliendo del «TOTAL A PAGAR» del resumen, que es el número que efectivamente pagás.
               </p>
-              {visiblesConsumos.map(i => <Editor key={i.id} item={i} categorias={categorias} />)}
+              {visiblesConsumos.map(i => (
+                <Editor key={i.id} item={i} categorias={categorias}
+                  periodo={periodo} esFijo={yaEsFijo(fijos, i.descripcion)} />
+              ))}
             </section>
           )}
         </>

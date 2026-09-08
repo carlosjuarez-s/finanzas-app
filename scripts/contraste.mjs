@@ -23,11 +23,15 @@ export const PARES = [
   ['claro  peso',        '#2D5FA8', '#F5F2EA'],
   ['claro  dolar',       '#1E7A4F', '#F5F2EA'],
   ['claro  alerta',      '#A25E0D', '#F5F2EA'],
+  ['claro  rotulo',      '#7D6440', '#F5F2EA'],
+  ['claro  rotulo/alto', '#7D6440', '#FFFDF7'],
   ['oscuro tinta',       '#E9E5DB', '#1A1D21'],
   ['oscuro tinta-suave', '#7F858C', '#1A1D21'],
   ['oscuro peso',        '#3E83E8', '#1A1D21'],
   ['oscuro dolar',       '#259661', '#1A1D21'],
   ['oscuro alerta',      '#C1700F', '#1A1D21'],
+  ['oscuro rotulo',      '#BFA271', '#1A1D21'],
+  ['oscuro rotulo/alto', '#BFA271', '#21252A'],
 ];
 
 export const MINIMO = 4.5;   // WCAG AA para texto normal

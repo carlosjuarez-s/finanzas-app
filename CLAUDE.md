@@ -84,6 +84,36 @@ mira —el del mes y el anterior, porque el sueldo de un mes paga la tarjeta del
 siguiente— y nada mas: cargar el sueldo en un mes que ningun cierre lee es
 escribir un dato que despues no aparece.
 
+## Lo que se toca y lo que no, no pueden ser del mismo color
+
+En el nav, los titulos de grupo (MES, INVERTIDO, PANORAMA) y los links eran los
+dos `--tinta-suave`. Dos cosas del mismo color donde una responde al toque y la
+otra no es una trampa: el rotulo parecia una seccion mas que no anda.
+
+Ahora el link va en **tinta plena** —lo que se toca tiene que ser lo mas
+visible del nav— y el rotulo en `--rotulo`, un sepia que no se parece a
+ninguno de los otros tokens. Medido: 4,98:1 sobre el papel y 5,48:1 sobre el
+papel alto, con sus dos pares agregados a `scripts/contraste.mjs` para que no
+se degrade sin que nadie se entere.
+
+El cambio de color destapo un bug que estaba tapado: en el telefono, el grupo
+"Mes" quedaba como rotulo huerfano porque sus tres links viven en la barra del
+pulgar. La regla que ocultaba grupos vacios usaba `:only-child` y solo cubria
+el grupo de un item; ahora es
+`.nav-grupo:not(:has(li:not([data-pulgar])))`, que es lo que se queria decir.
+
+## Un gasto cargado se vuelve fijo de un toque
+
+El camino largo era volver a escribir concepto, categoria y monto en otro
+formulario, teniendo la fila delante. El boton "Es fijo" de cada gasto lo hace
+con los defaults mas comunes —mensual, desde ese mes, sin aumento— y el aumento
+se agrega despues, que es lo unico que la fila no sabe.
+
+`yaEsFijo()` compara sin acentos ni mayusculas y la fila que ya es fija muestra
+su etiqueta en vez del boton. Sin eso, tocarlo en enero y otra vez en febrero
+sobre el mismo alquiler dejaba dos fijos iguales sumando doble en cada
+estimacion, y nadie lo iba a notar mirando la estimacion.
+
 ## La estimacion son los fijos, no un pronostico
 
 El total de la estimacion es **comprometido + fijo**, y nada mas: las cuotas

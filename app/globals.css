@@ -18,7 +18,12 @@
   --linea: #D9D3C4;         /*  solo bordes: no lleva texto encima */
   --peso: #2D5FA8;          /*  5.66:1 — ARS */
   --dolar: #1E7A4F;         /*  4.75:1 — USD */
-  --alerta: #A25E0D;        /*  4.53:1 — era #B4690E, quedaba en 3.78 */
+  --alerta: #A25E0D;
+  /* Rotulo: el texto del nav que NO se puede tocar. Sepia y no gris a
+     proposito — los links son grises, y dos cosas del mismo color donde una
+     responde al toque y la otra no es una trampa. Medido: 4,98:1 sobre el
+     papel y 5,48:1 sobre el papel alto. */
+  --rotulo: #7D6440;        /*  4.53:1 — era #B4690E, quedaba en 3.78 */
   --foco: #2D5FA8;
   --font-display: 'Archivo', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
@@ -188,19 +193,27 @@ section > h2 {
   /* 11px es el piso de legibilidad en un telefono, y lo verifica
      scripts/responsive.mjs. A 9px se leia bien en el monitor y no en la mano. */
   font-family: var(--font-data); font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--tinta-suave);
+  letter-spacing: 0.1em; color: var(--rotulo);
   white-space: nowrap;
+  /* Un rotulo no se selecciona ni se toca: que el cursor no diga lo contrario. */
+  cursor: default;
 }
 .nav ul { list-style: none; margin: 0; padding: 0; display: flex; gap: 13px; flex-wrap: wrap; }
 .nav a {
   font-family: var(--font-data); font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--tinta-suave); text-decoration: none;
+  /* Tinta plena, no gris: lo que se toca tiene que ser lo mas visible del
+     nav. Antes el link y el rotulo del grupo eran del mismo color, y el
+     rotulo parecia una seccion mas que no respondia al toque. */
+  letter-spacing: 0.1em; color: var(--tinta); text-decoration: none;
   /* El padding vertical es lo que hace tocable el link: el texto solo mide 17px
      de alto y en un telefono es dificil de acertar. */
   display: inline-block; padding: 8px 0;
 }
-.nav a:hover { color: var(--tinta); }
+.nav a:hover { color: var(--peso); text-decoration: underline; }
 .nav a[aria-current='page'] { color: var(--tinta); border-bottom: 2px solid var(--tinta); }
+/* Los que ya se visitaron no cambian de color: en un nav de nueve secciones,
+   nueve tonos distintos segun el historial es ruido, no informacion. */
+.nav a:visited { color: var(--tinta); }
 
 .supuesto { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 6px 0; }
 .nota {
@@ -534,7 +547,12 @@ section > h2 {
      cuatro links es ruido, y son justo los 109px que la barra venia a liberar.
      Los grupos que se quedan sin links tambien se van, con su titulo. */
   .nav li[data-pulgar] { display: none; }
-  .nav-grupo:has(li[data-pulgar]:only-child) { display: none; }
+  /* Un grupo cuyos links estan TODOS abajo se va entero, con su titulo. La
+     regla anterior usaba :only-child y solo cubria el grupo de un solo item:
+     "Mes" tiene tres, los tres en la barra del pulgar, y quedaba como un
+     rotulo huerfano sin nada debajo. Se ve mejor desde que el rotulo tiene su
+     propio color, que es como aparecio. */
+  .nav-grupo:not(:has(li:not([data-pulgar]))) { display: none; }
 }
 
 /* La flecha del signo. Chica y pegada al numero: es un refuerzo del signo, no
