@@ -793,6 +793,54 @@ modelo tiene que leer el documento.
 El riesgo de esa función no es dejar pasar un dato, es **sobre-censurar**: un DNI
 son 7-8 dígitos y un importe también. Todo lo ambiguo se ancla a su etiqueta.
 
+## Interés compuesto: ya estaba, no se veía
+
+`proyectar()` **siempre** capitalizó bien —`saldo * (1 + tasaMensual) + aporte`,
+mes a mes, con `tasaMensual = (1 + anual/100)^(1/12) − 1` y no `anual/12`— así que
+cuando se pidió "hacer la proyección con interés compuesto" no había nada
+matemáticamente roto. Lo que faltaba era otra cosa: el gráfico mostraba tres
+curvas que suben y **nada decía cuánto de esa subida la puso uno y cuánto el
+interés**, y ninguna pantalla contestaba "¿y entonces qué tengo que hacer?".
+
+Dos piezas, entonces:
+
+1. **Hacerlo visible.** La serie `Aportado` (dinero puesto, sin rendimiento) como
+   línea de referencia: la distancia entre ella y cada estrategia *es* el
+   rendimiento. Más la tabla "Cuánto lo puso el interés", que reparte el saldo
+   final en lo que pusiste y lo que puso la tasa.
+2. **`lib/plan.ts`: la anualidad al revés.** `proyectar()` va de aporte a saldo;
+   los pasos van de saldo deseado a aporte. `aporteNecesario()` despeja la cuota
+   de una anualidad ordinaria y `cuantoTarda()` despeja el plazo.
+
+### El techo cuando la tasa real es negativa
+
+Con `retornoRealPesos: -10` el saldo **no crece sin límite**: converge a
+`aporte / |i|`. Un objetivo por encima de ese techo no se alcanza *nunca*, por
+más años que se pongan. `cuantoTarda()` devuelve `{ ok: false, motivo: 'nunca',
+techo }` en vez de un número inventado o un loop que no termina, y la pantalla lo
+dice con el número del techo. Un test lo fija.
+
+### La línea de referencia se dibuja al final
+
+Con los supuestos por defecto `retornoRealDolares` es 0, así que `Aportado` y
+`Dolares` dan **exactamente lo mismo**. Dibujada en el orden del array, la
+referencia quedaba tapada por una serie más gruesa: la leyenda anunciaba una
+línea que no aparecía en el gráfico. Ahora las series `referencia` se dibujan
+últimas y llevan un halo del color del papel abajo del punteado, para que cada
+guión recorte lo que tenga atrás. Que el punteado quede justo encima del azul no
+es un defecto: dice que los dólares quietos no ponen nada.
+
+Las series de referencia **no gastan color de la paleta** (`SERIE_COLORES` tiene
+tres y cicla): se cuentan aparte al calcular el índice de color.
+
+### Una columna que era el mismo número tres veces
+
+La tabla del reparto empezó con cuatro columnas y medía 401px en una pantalla de
+320. "Pusiste" no depende de la estrategia —es el mismo aporte en las tres— así
+que salió de la tabla a una frase arriba, y la moneda salió de cada celda al
+encabezado (`Interés (U$S)`). Quedó en 288px. `fmtNumEntero` existe para eso:
+tabla donde la moneda ya está en el encabezado.
+
 ## Idioma
 
 Código, comentarios, commits e interfaz en castellano rioplatense.

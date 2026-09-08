@@ -12,6 +12,14 @@ export const fmtPct = (n: number) => num(n, 1) + '%';
 export const fmtArsEntero = (n: number) => '$ ' + num(n, 0);
 export const fmtUsdEntero = (n: number) => 'U$S ' + num(n, 0);
 
+// Sin simbolo: para tablas donde la moneda ya esta en el encabezado y repetirla
+// en cada celda es lo que las saca de la pantalla.
+export const fmtNumEntero = (n: number) => num(n, 0);
+
+// Un decimal y sin unidad: "4,3 años". toFixed(1) escribe "4.3", y en es-AR el
+// punto es el separador de miles, no el decimal.
+export const fmtNum1 = (n: number) => num(n, 1);
+
 // Para ejes: los miles llenan el eje y no aportan nada a esa escala.
 export const fmtCorto = (n: number) => {
   const abs = Math.abs(n);

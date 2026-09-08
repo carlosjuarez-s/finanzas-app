@@ -6,7 +6,9 @@ import { Button, InputNumber, Slider, Space, Typography } from 'antd';
 import {
   proyectar, ESTRATEGIAS, type Supuestos, type Estrategia,
 } from '@/lib/proyeccion';
-import { fmtUsd, fmtPeriodo } from '@/lib/formato';
+import { reparto } from '@/lib/plan';
+import { fmtUsd, fmtUsdEntero, fmtNumEntero, fmtArs, fmtPeriodo } from '@/lib/formato';
+import Pasos from './pasos';
 import LineChart from '../line-chart';
 
 const { Text } = Typography;
@@ -121,21 +123,75 @@ export default function Simulador({
 
       <section>
         <h2>Evolución en dólares de hoy</h2>
+        {/* La linea de "Aportado" es la que hace visible el interes compuesto:
+            la distancia entre ella y cada estrategia ES el rendimiento. Sin
+            ella el grafico muestra tres curvas que suben y no se sabe cuanto
+            de esa subida la pusiste vos. */}
         <LineChart
           etiquetas={muestra.map(p => fmtPeriodo(p.periodo))}
-          series={ESTRATEGIAS.map(e => ({
-            nombre: e.nombre,
-            valores: muestra.map(p => p.saldos[e.id as Estrategia]),
-          }))}
+          series={[
+            { nombre: 'Aportado', valores: muestra.map(p => p.aportado), referencia: true },
+            ...ESTRATEGIAS.map(e => ({
+              nombre: e.nombre,
+              valores: muestra.map(p => p.saldos[e.id as Estrategia]),
+            })),
+          ]}
           formato="corto"
           unidad="USD reales"
         />
         <p className="nota">
-          Aportarías {fmtUsd(final.aportado)} en total. Todo está en dólares de hoy: los
-          retornos ya descuentan inflación, así que un peso del gráfico compra lo mismo el
-          primer mes que el último.
+          La línea <strong>Aportado</strong> es la plata que pusiste vos: {fmtUsd(final.aportado)} en
+          total. Lo que hay por encima lo puso el interés, que se compone mes a mes sobre el
+          saldo anterior. Todo está en dólares de hoy: los retornos ya descuentan inflación, así
+          que un peso del gráfico compra lo mismo el primer mes que el último.
         </p>
       </section>
+
+      <section>
+        <h2>Cuánto lo puso el interés</h2>
+        {/* "Pusiste" no es una columna: el aporte no depende de la estrategia, es
+            el mismo numero repetido tres veces. Sacarlo de la tabla y decirlo una
+            sola vez deja entrar las tres columnas en un telefono de 320px. */}
+        <p className="resultado">
+          En {años} {años === 1 ? 'año' : 'años'} vas a poner{' '}
+          <strong>{fmtUsdEntero(final.aportado)}</strong> de tu bolsillo. Es el mismo aporte en
+          las tres estrategias: lo que cambia es lo que el interés hace con él.
+        </p>
+        <div className="tabla">
+          <table className="bimoneda">
+            <thead>
+              <tr><th></th><th>Interés (U$S)</th><th>Total (U$S)</th></tr>
+            </thead>
+            <tbody>
+              {ESTRATEGIAS.map(e => {
+                const saldo = final.saldos[e.id as Estrategia];
+                const r = reparto(saldo, final.aportado);
+                return (
+                  <tr key={e.id}>
+                    <td>{e.nombre}</td>
+                    <td className="monto" style={{ color: r.rendimiento >= 0 ? 'var(--dolar)' : 'var(--alerta)' }}>
+                      {r.rendimiento >= 0 ? '+' : ''}{fmtNumEntero(r.rendimiento)}
+                      {saldo > 0 && ` (${Math.round(r.pctRendimiento)}%)`}
+                    </td>
+                    <td className="monto">{fmtNumEntero(saldo)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="nota">
+          En pesos quietos el «interés» es negativo: no es un error, es lo que pierde el
+          poder de compra frente al dólar.
+        </p>
+      </section>
+
+      <Pasos
+        supuestos={supuestos}
+        aporteActualUsd={aporteMensualUsd}
+        saldoInicialUsd={ahorroAcumuladoUsd}
+        ingresoMensualArs={ingresoMensualArs}
+      />
 
       <section>
         <h2>Supuestos</h2>

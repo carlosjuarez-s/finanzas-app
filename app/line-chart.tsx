@@ -9,7 +9,17 @@ import { fmtArs, fmtUsd, fmtCorto } from '@/lib/formato';
 // distinguirse. No reordenar sin volver a validar.
 export const SERIE_COLORES = ['#B4690E', '#2D5FA8', '#1E7A4F'] as const;
 
-export type Serie = { nombre: string; valores: number[] };
+export type Serie = {
+  nombre: string;
+  valores: number[];
+  /**
+   * Una serie de REFERENCIA: la linea contra la que se leen las demas, no una
+   * mas del grupo. Va punteada y en tinta suave, y **no consume un color
+   * categorico** — que es lo que importa, porque `SERIE_COLORES` tiene tres y
+   * una cuarta serie normal reusaria el primero.
+   */
+  referencia?: boolean;
+};
 
 // El formato se elige por nombre y no pasando la funcion: React no puede
 // serializar una funcion de un server component a uno de cliente, y el error
@@ -105,16 +115,51 @@ export default function LineChart({ etiquetas, series, formato = 'corto', unidad
           <line x1={x(activo)} x2={x(activo)} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--tinta-suave)" strokeWidth="1" />
         )}
 
-        {series.map((s, si) => {
-          const color = SERIE_COLORES[si % SERIE_COLORES.length];
+        {/* Las de referencia se dibujan al final, no en el orden del array. Con
+            los supuestos por defecto "Aportado" y "Dolares" dan exactamente lo
+            mismo —los dolares quietos rinden 0— y la linea de base, dibujada
+            primero, quedaba tapada por una serie mas gruesa: la leyenda
+            anunciaba una linea que no estaba en el grafico. Arriba, el punteado
+            sobre la linea llena dice justamente eso: ahi el interes no puso
+            nada. sort() es estable, asi que las demas conservan su orden, y en
+            la leyenda la referencia sigue apareciendo primera. */}
+        {series
+          .map((s, si) => ({ s, si }))
+          .sort((a, b) => Number(!!a.s.referencia) - Number(!!b.s.referencia))
+          .map(({ s, si }) => {
+          // Las de referencia no gastan color: se cuentan aparte para que la
+          // primera serie real siga siendo el primer color de la paleta.
+          const color = s.referencia
+            ? 'var(--tinta-suave)'
+            : SERIE_COLORES[series.slice(0, si).filter(o => !o.referencia).length % SERIE_COLORES.length];
           const d = s.valores.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join(' ');
           const ultimo = s.valores.length - 1;
           return (
             <g key={s.nombre}>
-              <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+              {/* La referencia va con halo del color del papel debajo del
+                  punteado: casi siempre cae encima de otra serie —con los
+                  supuestos por defecto, exactamente encima de "Dolares"— y sin
+                  el halo los guiones se mezclan con la linea de abajo y no se
+                  leen. Con halo, cada guion recorta lo que tenga atras. */}
+              {s.referencia && (
+                <path
+                  d={d} fill="none" stroke="var(--papel)" strokeWidth="4"
+                  strokeDasharray="5 4" strokeLinejoin="round" strokeLinecap="butt"
+                />
+              )}
+              <path
+                d={d} fill="none" stroke={color}
+                strokeWidth={s.referencia ? 1.5 : 2}
+                strokeDasharray={s.referencia ? '5 4' : undefined}
+                strokeLinejoin="round" strokeLinecap={s.referencia ? 'butt' : 'round'}
+              />
               {/* Marcador del extremo con anillo del color del fondo, para que
                   siga legible donde dos series se cruzan. */}
-              <circle cx={x(ultimo)} cy={y(s.valores[ultimo])} r="4" fill={color} stroke="var(--papel)" strokeWidth="2" />
+              {/* La referencia no lleva marcador de extremo: no es un dato que
+                  uno vaya a leer puntualmente, es una linea de base. */}
+              {!s.referencia && (
+                <circle cx={x(ultimo)} cy={y(s.valores[ultimo])} r="4" fill={color} stroke="var(--papel)" strokeWidth="2" />
+              )}
               {activo !== null && (
                 <circle cx={x(activo)} cy={y(s.valores[activo])} r="4" fill={color} stroke="var(--papel)" strokeWidth="2" />
               )}
@@ -140,7 +185,15 @@ export default function LineChart({ etiquetas, series, formato = 'corto', unidad
       <div className="leyenda">
         {series.map((s, si) => (
           <span key={s.nombre} className="leyenda-item">
-            <span className="leyenda-marca" style={{ background: SERIE_COLORES[si % SERIE_COLORES.length] }} />
+            <span
+              className="leyenda-marca"
+              data-referencia={s.referencia ? '' : undefined}
+              style={{
+                background: s.referencia
+                  ? 'var(--tinta-suave)'
+                  : SERIE_COLORES[series.slice(0, si).filter(o => !o.referencia).length % SERIE_COLORES.length],
+              }}
+            />
             {s.nombre}
             {activo !== null && <span className="monto"> {fmt(s.valores[activo])}</span>}
           </span>

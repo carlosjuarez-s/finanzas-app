@@ -719,3 +719,14 @@ section > h2 {
 .bimoneda td:first-child { padding-left: 0; }
 .bimoneda .monto { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bimoneda .total td { border-top: 1px solid var(--linea); border-bottom: none; font-weight: 600; }
+
+/* Los pasos del plan. Numerados porque son una secuencia real: primero saber
+   dónde estás, después cuánto falta, después de dónde sale. */
+ol.pasos-plan { margin: 14px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+ol.pasos-plan li { font-size: 14px; color: var(--tinta-suave); }
+ol.pasos-plan li strong { color: var(--tinta); font-weight: 600; }
+ol.pasos-plan li::marker { font-family: var(--font-data); color: var(--rotulo); font-size: 12px; }
+
+/* La marca de una serie de referencia: mas fina y con el mismo punteado que su
+   linea, para que la leyenda diga qué es sin tener que leerlo. */
+.leyenda-marca[data-referencia] { height: 2px; opacity: .8; }
