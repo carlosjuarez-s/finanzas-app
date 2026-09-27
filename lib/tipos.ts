@@ -78,7 +78,21 @@ export type ArchivoTextoClasificado =
 
 export type PortfolioData = {
   plataforma: string; totalUsd: number | null; totalArs: number | null;
-  positions: { activo: string; clase: string; cantidad: number; valorUsd: number | null; valorArs: number | null }[];
+  positions: {
+    activo: string; clase: string; cantidad: number; valorUsd: number | null; valorArs: number | null;
+    // Opcionales: las capturas viejas y el sync de Binance no los traen.
+    precioUsd?: number | null; costoUnitarioUsd?: number | null;
+  }[];
+};
+
+// Correcciones del portafolio escritas. Es lo que devuelve el modelo, crudo: se
+// valida en lib/conciliar-servidor.ts antes de usarse.
+export type PortafolioTextoData = {
+  instrucciones: {
+    accion: string; activo: string; cantidad: number | null; plataforma: string | null;
+    clase: string | null; precioUsd: number | null; fecha: string | null;
+  }[];
+  motivo: string | null;
 };
 
 // Deteccion del tipo de archivo subido.

@@ -112,19 +112,60 @@ type RespuestaCuenta = {
   canWithdraw?: boolean;
 };
 
+type PaginaEarn = { rows?: { asset: string; totalAmount?: string; amount?: string }[]; total?: number };
+
 /**
- * Tenencias de la cuenta spot. Filtra los saldos en cero, que son la enorme
- * mayoria: Binance devuelve una fila por cada moneda que existe.
+ * Posiciones de Simple Earn, flexibles o bloqueadas. Paginado de a 100, con
+ * tope: diez paginas son mil productos, y si alguien tiene mas, cortar es
+ * mejor que quedarse colgado hasta el limite de la funcion.
+ */
+async function posicionesEarn(cred: CredencialBinance, tipo: 'flexible' | 'locked'): Promise<Tenencia[]> {
+  const salida: Tenencia[] = [];
+  for (let pagina = 1; pagina <= 10; pagina++) {
+    const r = await pedir<PaginaEarn>(`/sapi/v1/simple-earn/${tipo}/position`, cred, { current: pagina, size: 100 });
+    const filas = r.rows ?? [];
+    for (const f of filas) {
+      // La flexible informa totalAmount; la bloqueada, amount.
+      salida.push({ activo: f.asset, cantidad: Number(f.totalAmount ?? f.amount ?? 0) });
+    }
+    if (filas.length < 100 || salida.length >= (r.total ?? 0)) break;
+  }
+  return salida;
+}
+
+/**
+ * Tenencias de la cuenta: spot MAS Simple Earn.
+ *
+ * `/api/v3/account` solo ve spot. Lo que esta en Earn —y mucha gente tiene
+ * todo ahi, porque rinde— no aparece, y un sync que solo leyera spot guardaria
+ * una foto de Binance sin esas monedas: la cuenta pareceria vaciada. Si Earn
+ * no se puede leer, falla el sync entero en vez de guardar una foto a medias.
+ *
+ * Filtra los saldos en cero, que son la enorme mayoria: Binance devuelve una
+ * fila por cada moneda que existe.
  */
 export async function tenencias(cred: CredencialBinance): Promise<Tenencia[]> {
-  const cuenta = await pedir<RespuestaCuenta>('/api/v3/account', cred);
+  const [cuenta, flexible, bloqueado] = await Promise.all([
+    pedir<RespuestaCuenta>('/api/v3/account', cred),
+    posicionesEarn(cred, 'flexible'),
+    posicionesEarn(cred, 'locked'),
+  ]);
 
-  return (cuenta.balances ?? [])
-    .map(b => ({
-      activo: b.asset,
-      cantidad: Number(b.free ?? 0) + Number(b.locked ?? 0),
-    }))
-    .filter(t => Number.isFinite(t.cantidad) && t.cantidad > 0)
+  // Algunas cuentas muestran lo flexible tambien en spot, como «LDBTC». Si esa
+  // moneda ya vino de Earn, el LD es la misma plata contada otra vez. Solo se
+  // descarta en ese caso: LDO es un token real y no tiene nada que ver.
+  const enFlexible = new Set(flexible.map(f => f.activo));
+  const spot = (cuenta.balances ?? [])
+    .filter(b => !(b.asset.startsWith('LD') && enFlexible.has(b.asset.slice(2))))
+    .map(b => ({ activo: b.asset, cantidad: Number(b.free ?? 0) + Number(b.locked ?? 0) }));
+
+  const total = new Map<string, number>();
+  for (const t of [...spot, ...flexible, ...bloqueado]) {
+    if (!Number.isFinite(t.cantidad) || t.cantidad <= 0) continue;
+    total.set(t.activo, (total.get(t.activo) ?? 0) + t.cantidad);
+  }
+  return [...total.entries()]
+    .map(([activo, cantidad]) => ({ activo, cantidad }))
     .sort((a, b) => a.activo.localeCompare(b.activo));
 }
 

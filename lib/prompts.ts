@@ -96,11 +96,21 @@ export const PORTFOLIO_SPEC = `{
     "clase": "CRIPTO" | "CEDEAR" | "RENTA_FIJA" | "FCI" | "DOLAR",
     "cantidad": number,
     "valorUsd": number | null,
-    "valorArs": number | null
+    "valorArs": number | null,
+    "precioUsd": number | null,       // precio por UNIDAD en USD/USDT/USDC, si la pantalla lo muestra
+    "costoUnitarioUsd": number | null // precio promedio de compra: "Cost Price", "PPC", "Precio promedio"
   }]
 }
 
-No inventes cotizaciones: si una posicion no muestra valuacion, deja valorUsd/valorArs en null. No mezcles variaciones porcentuales con valores absolutos.`;
+No inventes cotizaciones: si una posicion no muestra valuacion, deja valorUsd/valorArs en null. No mezcles variaciones porcentuales con valores absolutos. No multipliques: si la pantalla muestra el saldo en pesos y el precio por unidad en dolares (Binance muestra "BTC/USDT 84,466.00"), pone el saldo en valorArs, el precio en precioUsd y deja valorUsd en null; la cuenta la hace el sistema.
+
+"costoUnitarioUsd" es lo que se pago por unidad en promedio, no el precio de hoy. Solo si esta rotulado como costo o precio de compra y en dolares; si no, null.
+
+Una cuenta bancaria o una caja de ahorro en dolares tambien es PORTFOLIO: "plataforma" es el banco (el nombre, no el numero de cuenta), activo "USD", clase "DOLAR", cantidad = el saldo. Si hay varias cuentas o cajas, una posicion por moneda.
+
+Una misma posicion puede figurar en dos lugares de la pantalla (el total y el desglose "Earn"/"Spot", o "Total Balance" y "Allocation"): contala UNA vez, con el total. Nunca copies numeros de cuenta, CBU ni alias.
+
+En Binance y en cripto, los separadores son en ingles: "0.02569956" es menos de uno y "3,515,728.68" son tres millones. En bancos argentinos, "1.618,27" son mil seiscientos.`;
 
 // Prompts de un solo tipo: los usa el sync, que ya sabe que hay en cada carpeta.
 export const statementSystem = (cats: string[]) => `Sos un extractor de datos de resumenes de tarjeta de credito argentinos (Mastercard/Visa de bancos locales). Recibis el PDF y devolves SOLO un JSON valido, sin markdown ni texto extra, con esta forma exacta:
@@ -250,3 +260,41 @@ Reglas propias del texto libre:
 - Si no se aclara el mes, usar el mes actual.
 - Si no hay un importe reconocible, devolver DESCONOCIDO con { "motivo": "..." }. Nunca inventar un numero.
 - Si la descripcion menciona varios gastos, quedarse con el principal y aclararlo en "concepto".`;
+
+// Correcciones del portafolio escritas: «tengo 50 GGAL, no 40». El modelo solo
+// traduce la intencion a instrucciones; la cuenta (cuanto queda, que cuenta,
+// que va al libro) la hace lib/conciliar.ts. Si el modelo calculara el estado
+// final, un «vendi la mitad» mal entendido quedaria guardado como un hecho.
+export const PORTAFOLIO_TEXTO_SYSTEM = `Interpretas correcciones escritas sobre un portafolio de inversiones y devolves SOLO JSON valido, sin markdown:
+
+{
+  "instrucciones": [{
+    "accion": "FIJAR" | "SUMAR" | "RESTAR" | "QUITAR" | "MOVER" | "VACIAR",
+    "activo": string,               // ticker: GGAL, AL30, BTC, SPY, AAPL
+    "cantidad": number | null,      // unidades, no dinero
+    "plataforma": string | null,    // cuenta: "IOL", "Binance", "Balanz". Null si no se dice
+    "clase": "CRIPTO" | "CEDEAR" | "RENTA_FIJA" | "FCI" | "DOLAR" | null,
+    "precioUsd": number | null,     // por unidad, SOLO si lo dijo en dolares
+    "fecha": "YYYY-MM-DD" | null    // si dijo cuando
+  }],
+  "motivo": string | null           // si no se entiende nada, por que
+}
+
+Que accion corresponde:
+- FIJAR: dice cuanto TIENE. "tengo 50 GGAL", "son 50, no 40", "en realidad tengo 0,15 BTC". Cantidad = el total que dice tener.
+- SUMAR: compro o recibio MAS. "compre 10 AAPL", "me entraron 20 AL30".
+- RESTAR: vendio o saco UNA PARTE. "vendi 5 GGAL".
+- QUITAR: ya no tiene nada de ese activo. "vendi todo el MELI", "ya no tengo SPY", "borra el AL30". Cantidad null.
+- MOVER: el activo esta en otra cuenta. "el AL30 esta en IOL, no en Binance" -> plataforma "IOL" (el destino). Cantidad null salvo que diga cuanto.
+- VACIAR: vendio o saco TODO lo de una cuenta, sin nombrar los activos. "vendi todo lo de IOL", "lo de IOL lo pase a efectivo", "cerre la cuenta de Balanz". activo "", plataforma = la cuenta.
+
+Si pasa una cuenta a efectivo y dice cuanto quedo ("lo de IOL lo pase a efectivo, tengo 6400 USD"), son DOS instrucciones: VACIAR esa cuenta, y FIJAR activo "USD", clase "DOLAR", cantidad 6400 en la misma plataforma. El efectivo en dolares es activo "USD"; en pesos, "ARS".
+
+Reglas:
+- Una instruccion por activo mencionado. Un texto puede traer varias.
+- "No 40" o "no tengo 40" corrige, no resta: es FIJAR con el numero que SI tiene.
+- La cantidad son unidades (nominales, acciones, monedas), nunca pesos ni dolares. "Compre 100 dolares de BTC" no dice cuantos BTC: cantidad null.
+- Formato argentino: "0,15" es 0.15; "1.500" es 1500.
+- precioUsd solo si el precio esta en dolares ("a 180 dolares", "a USD 180", "a 180 usd"). Si el precio esta en pesos o no se dice, null.
+- Fechas relativas ("ayer", "el lunes", "en marzo") se resuelven contra hoy, que es {HOY}. Sin fecha, null.
+- No inventes: si no se entiende el activo o la accion, no agregues esa instruccion. Si no se entiende nada, instrucciones = [] y explica en "motivo".`;

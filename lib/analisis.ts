@@ -1,4 +1,5 @@
 import { asc, desc, eq } from 'drizzle-orm';
+import { ultimasPorCuenta } from './conciliar';
 import { db } from '@/lib/db';
 import { monthlyCloses, gastos, goals, transacciones, portfolioSnapshots, prestamosPersonales } from '@/db/schema';
 import { auditar, type Hallazgo, type DatosAuditoria } from './auditoria';
@@ -53,10 +54,12 @@ export async function reunirDatos(usuarioId: string): Promise<DatosAuditoria> {
     devoluciones: f.devoluciones.map(d => ({ id: d.id, fecha: d.fecha, monto: Number(d.monto) })),
   }));
 
-  const snaps = await db.query.portfolioSnapshots.findMany({
+  // La ultima foto de cada cuenta, no las ultimas N: sumar dos meses de la
+  // misma cuenta cuenta dos veces lo que no se movio.
+  const snaps = ultimasPorCuenta(await db.query.portfolioSnapshots.findMany({
     where: eq(portfolioSnapshots.usuarioId, usuarioId),
-    orderBy: desc(portfolioSnapshots.periodo), with: { positions: true }, limit: 4,
-  });
+    orderBy: desc(portfolioSnapshots.periodo), with: { positions: true },
+  }));
   const activosConLibro = (await db.selectDistinct({ activo: transacciones.activo })
     .from(transacciones).where(eq(transacciones.usuarioId, usuarioId)))
     .map(r => r.activo);

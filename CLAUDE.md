@@ -415,6 +415,58 @@ Una operacion en pesos sin el dolar de su dia queda **afuera** del aportado y se
 cuenta aparte. Convertirla al dolar de hoy diria que compraste mucho mas barato
 de lo que compraste.
 
+## Portafolio: se fija un estado, no se suma una novedad
+
+Sin integracion, cargar compras y ventas de a una no escala: la persona sabe que
+**tiene** (lo ve en la app del broker), no la lista de operaciones que la llevo
+ahi. Por eso `app/portafolio/actualizar.tsx` recibe un estado —capturas, o un
+texto como «tengo 50 GGAL, no 40»— y `lib/conciliar.ts` deduce la diferencia.
+
+La regla que evita el solapamiento: **la foto nueva de una cuenta reemplaza a la
+anterior de esa cuenta, y el libro se ajusta por la diferencia contra lo que
+tiene AHORA**. Cargar dos veces la misma captura, o confirmar dos veces, no
+cambia nada la segunda vez: la diferencia ya es cero. Nunca se suma una foto
+encima de otra.
+
+Lo que tenes hoy es la **ultima foto de cada cuenta** (`ultimasFotos`). Antes se
+sumaban las ultimas 8 fotos sin mirar la cuenta, y si IOL tenia agosto y
+septiembre, todo lo que no se movio contaba doble — en el portafolio, en el
+analisis y en el MCP. La serie mes a mes arrastra la ultima foto de cada cuenta
+(`seriePorPeriodo`): actualizar solo IOL no puede hacer caer el total lo que vale
+Binance. Una cuenta vaciada deja una foto vacia, que es lo que la saca del total.
+
+«IOL», «InvertirOnline» e «Invertir Online» son la misma cuenta
+(`clavePlataforma`); guardadas distinto serian dos fotos sumandose.
+
+Cinco reglas que salieron de casos reales:
+
+- **No aparecer no es haberlo vendido.** En una captura, lo que falta arranca
+  como «Sigue»: la foto puede estar cortada. En un texto («vendi todo lo de
+  IOL») arranca como «Ya no», porque se saco a proposito.
+- **El modelo traduce, el codigo cuenta.** Del texto salen instrucciones
+  (FIJAR, SUMAR, RESTAR, QUITAR, MOVER, VACIAR); cuanto queda y en que cuenta lo
+  calcula `aplicarInstrucciones`. Si el activo esta en dos cuentas y no se dijo
+  cual, se pregunta: no se adivina.
+- **El precio del ajuste, en orden:** el que dijo la persona; para una compra,
+  el costo promedio que muestra el broker («Cost Price», «PPC»), que es lo que se
+  pago de verdad; si no, el de la foto. Una venta va al precio de la foto. El
+  efectivo vale 1. Sin precio no se anota, y el aviso de «Revisar» queda.
+- **Mover de cuenta no toca el libro**: el total no cambio.
+- **Nada se escribe sin la vista previa.** `/api/portafolio/conciliar` no
+  escribe; `/api/portafolio/aplicar` recibe el estado FINAL de cada cuenta,
+  recalcula todo contra la base de ese momento y escribe en un solo
+  `db.batch`: una cuenta actualizada con el libro sin ajustar es justo el estado
+  que esto viene a evitar.
+
+Capturas de cuentas distintas se leen por separado (juntas, el modelo las mezcla
+en una); varias de la **misma** cuenta se releen juntas, porque por separado un
+activo que aparece en las dos se sumaria dos veces.
+
+**Binance Earn.** `/api/v3/account` solo ve spot. Lo que esta en Simple Earn no
+aparece, y un sync que solo leyera spot guardaria una foto sin esas monedas: la
+cuenta pareceria vaciada. `tenencias()` suma spot + Earn flexible + bloqueado, y
+si Earn no se puede leer falla el sync entero antes que guardar una foto a medias.
+
 ## Categorias: son del usuario, no del codigo
 
 Estaban fijas en `lib/prompts.ts`, en rioplatense y con los rubros de una

@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import { ultimasPorCuenta } from './conciliar';
 import { db } from '@/lib/db';
 import {
   monthlyCloses, statements, consumos, gastos, goals, transacciones,
@@ -204,10 +205,12 @@ export async function gastoPorCategoria(usuarioId: string, desde: string, hasta:
 
 /** Tenencias del ultimo snapshot y el libro de operaciones, en numeros. */
 export async function portafolio(usuarioId: string) {
-  const snaps = await db.query.portfolioSnapshots.findMany({
+  // La ultima foto de cada cuenta, no las ultimas N: sumar dos meses de la
+  // misma cuenta cuenta dos veces lo que no se movio.
+  const snaps = ultimasPorCuenta(await db.query.portfolioSnapshots.findMany({
     where: eq(portfolioSnapshots.usuarioId, usuarioId),
-    orderBy: desc(portfolioSnapshots.periodo), with: { positions: true }, limit: 8,
-  });
+    orderBy: desc(portfolioSnapshots.periodo), with: { positions: true },
+  }));
 
   const [{ cuantas } = { cuantas: 0 }] = await db
     .select({ cuantas: sql<number>`count(*)::int` }).from(transacciones)

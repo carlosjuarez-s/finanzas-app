@@ -1,6 +1,6 @@
 import {
   statementSystem, SALARY_SYSTEM, PORTFOLIO_SYSTEM, classifySystem, textoSystem,
-  clasificarTextoSystem,
+  clasificarTextoSystem, PORTAFOLIO_TEXTO_SYSTEM,
 } from './prompts';
 import { leerCategorias } from './categorias';
 import { anthropicConfigurado, anthropicGenerar, anthropicSinCredito } from './anthropic';
@@ -8,7 +8,7 @@ import { geminiConfigurado, geminiGenerar } from './gemini';
 import { redactar, redactarProfundo } from './pii';
 import type {
   Documento, StatementData, SalaryData, PortfolioData, DocumentoClasificado, TextoClasificado,
-  ArchivoTextoClasificado,
+  ArchivoTextoClasificado, PortafolioTextoData,
 } from './tipos';
 
 export type {
@@ -106,3 +106,21 @@ export async function interpretarTexto(usuarioId: string, descripcion: string) {
   );
   return { resultado: redactarProfundo(salida), hallazgos };
 }
+
+// Correcciones del portafolio por texto: «tengo 50 GGAL, no 40». Igual que un
+// gasto escrito, se redacta ANTES de salir: una persona puede pegar el numero
+// de cuenta junto con la correccion.
+export async function interpretarPortafolioTexto(descripcion: string) {
+  const { texto, hallazgos } = redactar(descripcion);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const salida = parseJson<PortafolioTextoData>(
+    await generar(PORTAFOLIO_TEXTO_SYSTEM.replace('{HOY}', hoy), [], `Correccion a interpretar:\n${texto}`),
+  );
+  return { resultado: redactarProfundo(salida), hallazgos };
+}
+
+// Capturas de UNA cuenta: el que las sube ya dijo que es un portafolio, asi que
+// no hace falta clasificar. Se redacta lo que vuelve porque el nombre de la
+// plataforma lo escribe el modelo y puede arrastrar un numero de cuenta.
+export const extraerPortafolio = async (docs: Documento[]) =>
+  redactarProfundo(parseJson<PortfolioData>(await generar(PORTFOLIO_SYSTEM, docs)));

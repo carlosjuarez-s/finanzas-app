@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { firmar, preciosUsdt } from './binance';
+import { firmar, preciosUsdt, tenencias } from './binance';
 
 // La firma es lo unico de este cliente que se puede verificar sin llamar a la
 // API. Si esta mal, todos los pedidos vuelven 401 y no hay forma de saber por
@@ -41,3 +41,41 @@ test('un 451 se explica como geo-bloqueo y no como problema de la clave', async 
     globalThis.fetch = original;
   }
 });
+
+// Un fetch falso que responde segun la ruta pedida.
+function conRespuestas(rutas: Record<string, unknown>, fn: () => Promise<void>) {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: string) => {
+    const ruta = new URL(url).pathname;
+    if (!(ruta in rutas)) return new Response('{"code":-1,"msg":"ruta inesperada"}', { status: 400 });
+    const r = rutas[ruta];
+    return r instanceof Response ? r : new Response(JSON.stringify(r), { status: 200 });
+  }) as typeof fetch;
+  return fn().finally(() => { globalThis.fetch = original; });
+}
+const cred = { apiKey: 'k', apiSecret: 's' };
+
+test('las tenencias suman spot y Earn: lo que esta en Earn no desaparece', () => conRespuestas({
+  '/api/v3/account': { balances: [
+    { asset: 'BTC', free: '0.001', locked: '0' },
+    { asset: 'USDT', free: '0', locked: '0' },
+    // La misma plata de Earn vista desde spot: no se cuenta dos veces.
+    { asset: 'LDBTC', free: '0.02469956', locked: '0' },
+    // LDO es un token de verdad, no un espejo de Earn.
+    { asset: 'LDO', free: '3', locked: '0' },
+  ] },
+  '/sapi/v1/simple-earn/flexible/position': { rows: [{ asset: 'BTC', totalAmount: '0.02469956' }], total: 1 },
+  '/sapi/v1/simple-earn/locked/position': { rows: [{ asset: 'ETH', amount: '1.5' }], total: 1 },
+}, async () => {
+  const t = await tenencias(cred);
+  assert.deepEqual(t.map(x => x.activo), ['BTC', 'ETH', 'LDO']);
+  assert.ok(Math.abs(t[0].cantidad - 0.02569956) < 1e-12);
+}));
+
+test('si Earn no se puede leer, falla el sync: no se guarda una foto a medias', () => conRespuestas({
+  '/api/v3/account': { balances: [{ asset: 'BTC', free: '0.001', locked: '0' }] },
+  '/sapi/v1/simple-earn/flexible/position': new Response('{"code":-1002,"msg":"no autorizado"}', { status: 401 }),
+  '/sapi/v1/simple-earn/locked/position': { rows: [], total: 0 },
+}, async () => {
+  await assert.rejects(() => tenencias(cred), /no autorizado/);
+}));

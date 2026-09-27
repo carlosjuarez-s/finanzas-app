@@ -1,6 +1,6 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { portfolioSnapshots, transacciones } from '@/db/schema';
+import { transacciones } from '@/db/schema';
 import { resultadosPorActivo, discrepancias, ratiosVigentes, clasesDeActivos } from '@/lib/sync-portafolio';
 import { preciosDePortafolio } from '@/lib/precios';
 import { fmtUsd, fmtPct } from '@/lib/formato';
@@ -8,6 +8,9 @@ import { tablaFaltante } from '@/lib/errores';
 import Nav from '../nav';
 import FaltaMigracion from '../falta-migracion';
 import AltaTransaccion from './alta-transaccion';
+import Actualizar from './actualizar';
+import { ultimasFotos, seriePorPeriodo } from '@/lib/conciliar';
+import { cargarFotos } from '@/lib/conciliar-servidor';
 import Operaciones, { type Operacion } from './operaciones';
 import BarChart from '../bar-chart';
 import LineChart from '../line-chart';
@@ -24,14 +27,12 @@ export default async function Portafolio() {
   let sinPrecio: string[] = [];
   let serie: SnapshotPeriodo[] = [];
   try {
-    // Ultimo snapshot de cada plataforma: es lo que el broker dice que tenes.
-    const snaps = await db.query.portfolioSnapshots.findMany({
-      where: eq(portfolioSnapshots.usuarioId, usuarioId),
-      orderBy: desc(portfolioSnapshots.periodo), with: { positions: true }, limit: 8,
-    });
-    tenencias = snaps.flatMap(s => s.positions.map(p => ({
-      activo: p.activo, cantidad: Number(p.cantidad), plataforma: s.plataforma,
-      valorUsd: p.valorUsd === null ? null : Number(p.valorUsd),
+    // Lo que tenes hoy es la ULTIMA foto de cada cuenta. Antes se sumaban las
+    // ultimas 8 fotos, y si IOL tenia agosto y septiembre, todo lo que no se
+    // movio entre un mes y otro contaba doble.
+    const fotos = await cargarFotos(usuarioId);
+    tenencias = ultimasFotos(fotos).flatMap(f => f.tenencias.map(t => ({
+      activo: t.activo, cantidad: t.cantidad, plataforma: f.plataforma, valorUsd: t.valorUsd,
     })));
 
     // Precio implicito de lo que informo el broker en el ultimo snapshot: sirve
@@ -50,22 +51,9 @@ export default async function Portafolio() {
 
     ({ resultados, errores } = await resultadosPorActivo(usuarioId, precios));
 
-    // Para el historico hacen falta TODOS los snapshots, no los ultimos 8 que
-    // alcanzan para la foto de hoy.
-    const todos = await db.select({
-      periodo: portfolioSnapshots.periodo, totalUsd: portfolioSnapshots.totalUsd,
-    }).from(portfolioSnapshots).where(eq(portfolioSnapshots.usuarioId, usuarioId));
-
-    // Un periodo puede tener varias plataformas: se suman. Si a alguna le falta
-    // la valuacion, el total del mes queda en null — un total al que le falta
-    // una plataforma se leeria como una caida que no existio.
-    const porPeriodo = new Map<string, number | null>();
-    for (const f of todos) {
-      const previo = porPeriodo.get(f.periodo);
-      const v = f.totalUsd === null ? null : Number(f.totalUsd);
-      porPeriodo.set(f.periodo, previo === null || v === null ? null : (previo ?? 0) + v);
-    }
-    serie = [...porPeriodo.entries()].map(([periodo, valorUsd]) => ({ periodo, valorUsd }));
+    // Mes a mes, arrastrando la ultima foto de cada cuenta: actualizar solo
+    // IOL en septiembre no puede hacer caer el total lo que vale Binance.
+    serie = seriePorPeriodo(fotos);
     ops = (await db.select().from(transacciones)
       .where(eq(transacciones.usuarioId, usuarioId))
       .orderBy(desc(transacciones.fecha))).map(t => ({
@@ -152,6 +140,8 @@ export default async function Portafolio() {
           <p className="valor"><Monto valor={invertidoUsd ? noRealizado : null} moneda="USD" /></p>
         </div>
       </div>
+
+      <Actualizar />
 
       {avisos.length > 0 && (
         <section>
@@ -295,6 +285,14 @@ export default async function Portafolio() {
             <Monto valor={realizado} moneda="USD" />
           </div>
         </section>
+      )}
+
+      {ops.some(o => o.origen === 'AJUSTE') && (
+        <p className="nota">
+          Las operaciones marcadas «ajuste» salieron de actualizar una cuenta, no de una compra
+          o venta anotada una por una. Si el precio fue el de ese día y compraste antes,
+          corregilo abajo: es lo que usa el cálculo de ganancia.
+        </p>
       )}
 
       <Operaciones operaciones={ops} />

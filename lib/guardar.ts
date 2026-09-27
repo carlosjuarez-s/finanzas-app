@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { statements, consumos, salaries, portfolioSnapshots, positions, gastos, transacciones, prestamos } from '@/db/schema';
 import { leerCategorias, encajar } from './categorias';
+import { completarValor, nombrePlataforma } from './conciliar';
 import { periodoValido } from './formato';
 import type { Sueldo } from './sueldo';
 import type { StatementData, SalaryData, PortfolioData, GastoData, MovimientoData, CuotasData } from './tipos';
@@ -16,7 +17,7 @@ import type { StatementData, SalaryData, PortfolioData, GastoData, MovimientoDat
 // que falta no puede tumbar el guardado entero, y un numero mal formateado no
 // puede terminar como "undefined" en una columna numerica.
 
-function num(v: unknown, porDefecto = 0): number {
+export function num(v: unknown, porDefecto = 0): number {
   if (typeof v === 'number') return Number.isFinite(v) ? v : porDefecto;
   if (typeof v !== 'string') return porDefecto;
   // El prompt pide convertir el formato argentino (1.234,56) pero a veces se
@@ -213,9 +214,11 @@ export async function guardarPortfolio(usuarioId: string, periodo: string, data:
   // null y 0 no son lo mismo: "no muestra valuacion" no es "vale cero".
   const monto = (v: unknown) => (v == null ? null : String(num(v)));
 
+  // El nombre canonico: «IOL» e «InvertirOnline» son la misma cuenta, y
+  // guardados distinto quedarian como dos fotos del mismo mes sumandose.
   const [snap] = await db.insert(portfolioSnapshots)
     .values({
-      usuarioId, periodo, plataforma: texto(data.plataforma, 'Sin identificar'),
+      usuarioId, periodo, plataforma: nombrePlataforma(texto(data.plataforma, 'Sin identificar')),
       totalUsd: monto(data.totalUsd), totalArs: monto(data.totalArs),
     })
     .onConflictDoUpdate({
@@ -229,13 +232,23 @@ export async function guardarPortfolio(usuarioId: string, periodo: string, data:
   await db.delete(positions).where(eq(positions.snapshotId, snap.id));
   const tenencias = Array.isArray(data.positions) ? data.positions : [];
   if (tenencias.length) {
-    await db.insert(positions).values(tenencias.map(p => ({
-      snapshotId: snap.id,
-      activo: texto(p?.activo, 'Sin identificar'),
-      clase: texto(p?.clase, 'OTRO'),
-      cantidad: String(num(p?.cantidad)),
-      valorUsd: monto(p?.valorUsd), valorArs: monto(p?.valorArs),
-    })));
+    await db.insert(positions).values(tenencias.map(p => {
+      const activo = texto(p?.activo, 'Sin identificar');
+      const cantidad = num(p?.cantidad);
+      // Efectivo y precio por unidad se convierten aca, no en el modelo.
+      const { valorUsd } = completarValor({
+        activo, clase: texto(p?.clase, 'OTRO'), cantidad,
+        valorUsd: p?.valorUsd == null ? null : num(p.valorUsd),
+        precioUsd: p?.precioUsd == null ? null : num(p.precioUsd),
+      });
+      return {
+        snapshotId: snap.id,
+        activo,
+        clase: texto(p?.clase, 'OTRO'),
+        cantidad: String(cantidad),
+        valorUsd: valorUsd === null ? null : String(valorUsd), valorArs: monto(p?.valorArs),
+      };
+    }));
   }
   return { id: snap.id, posiciones: tenencias.length };
 }

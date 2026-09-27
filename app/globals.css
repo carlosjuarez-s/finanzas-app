@@ -748,3 +748,12 @@ ol.pasos-plan li::marker { font-family: var(--font-data); color: var(--rotulo); 
 /* La marca de una serie de referencia: mas fina y con el mismo punteado que su
    linea, para que la leyenda diga qué es sin tener que leerlo. */
 .leyenda-marca[data-referencia] { height: 2px; opacity: .8; }
+
+/* Actualizar el portafolio: cada cuenta y cada ajuste del libro es un bloque.
+   Separados por borde y no solo por espacio: en la vista previa hay varias
+   cuentas seguidas y tienen que leerse como cosas distintas. */
+.cuenta, .ajuste {
+  border: 1px solid var(--linea); border-radius: 6px; padding: 10px 12px; margin-top: 10px;
+  background: var(--papel-alto);
+}
+.cuenta .fila > :last-child { align-self: center; }
